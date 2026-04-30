@@ -1,0 +1,483 @@
+/*
+ * Quantpilot — washi paper + sumi ink + vermilion seal aesthetic.
+ * Flat palette, hairline rules, no gradients, no glassmorphism.
+ */
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+  background-color: #f3ecdc;
+  /* Faint paper-fibre noise; kept very low contrast so text stays legible. */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.42  0 0 0 0 0.36  0 0 0 0 0.28  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 220px 220px;
+  color: #1a1612;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(26, 22, 18, 0.18);
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 22, 18, 0.32);
+}
+
+/* ----- Layout helpers ------------------------------------------------- */
+
+.qp-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.qp-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px dotted #c4b48f;
+}
+
+.qp-page__title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #1a1612;
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+
+.qp-page__subtitle {
+  color: #544a40;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.qp-card-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.qp-section-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #544a40;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  margin: 4px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qp-section-title::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 1px;
+  background: #bd3f29;
+}
+
+.qp-section-title--plain {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 14px;
+}
+.qp-section-title--plain::before {
+  display: none;
+}
+
+.qp-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 16px;
+}
+
+/* ----- Tone / typography helpers ------------------------------------- */
+
+.qp-muted {
+  color: #8a7f6f;
+}
+
+.qp-positive {
+  color: #3f6b48;
+}
+
+.qp-negative {
+  color: #bd3f29;
+}
+
+.qp-mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+  font-size: 12.5px;
+  color: #544a40;
+}
+
+.qp-serif {
+  font-family: "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    Georgia, "Times New Roman", serif;
+  font-feature-settings: "lnum";
+}
+
+.qp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 2px;
+  background: rgba(189, 63, 41, 0.08);
+  color: #8c2c1c;
+  border: 1px solid rgba(189, 63, 41, 0.32);
+  letter-spacing: 0.4px;
+}
+
+.qp-pill--mock {
+  background: rgba(168, 123, 28, 0.1);
+  color: #7a5910;
+  border-color: rgba(168, 123, 28, 0.32);
+}
+
+.qp-pill--soft {
+  background: rgba(26, 22, 18, 0.05);
+  border-color: rgba(26, 22, 18, 0.12);
+  color: #544a40;
+}
+
+.qp-empty-stub {
+  padding: 32px 16px;
+  text-align: center;
+  background: #fdf9ee;
+  border: 1px dashed #dccfb2;
+  border-radius: 4px;
+  color: #8a7f6f;
+}
+
+/* ----- Sider + topbar ------------------------------------------------- */
+
+.qp-sider {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  border-right: 1px solid #3a3128;
+  background: #171310 !important;
+}
+
+.qp-sider-brand {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 22px;
+  color: #f5efdc;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  border-bottom: 1px solid #3a3128;
+  font-family: "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    Georgia, "Times New Roman", serif;
+}
+
+/* The brand "dot" is a small vermilion seal-style square. */
+.qp-sider-brand__dot {
+  width: 16px;
+  height: 16px;
+  background: #bd3f29;
+  border: 1px solid #8c2c1c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f5efdc;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: "Songti SC", "Source Han Serif SC", Georgia, serif;
+  flex-shrink: 0;
+}
+.qp-sider-brand__dot::before {
+  content: "量";
+}
+
+.qp-sider-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 22px;
+  border-top: 1px solid #3a3128;
+  font-size: 11px;
+  color: #9b8f7c;
+  display: flex;
+  justify-content: space-between;
+  letter-spacing: 0.5px;
+}
+
+.qp-content {
+  padding: 24px 28px 36px;
+  max-width: 1480px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.qp-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f3ecdc !important;
+  border-bottom: 1px solid #dccfb2;
+  padding: 0 24px;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.qp-topbar__crumbs {
+  font-size: 13px;
+  color: #544a40;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+}
+
+.qp-topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ----- Card hover lift used selectively ------------------------------ */
+
+.qp-clickable {
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.qp-clickable:hover {
+  border-color: #bd3f29 !important;
+  background: #fdf9ee !important;
+}
+
+/* ----- Hero (paper research-report style) ---------------------------- */
+
+.qp-hero {
+  position: relative;
+  border-radius: 4px;
+  padding: 26px 32px 22px;
+  color: #1a1612;
+  background: #fdf9ee;
+  border: 1px solid #dccfb2;
+  border-top: 3px solid #1a1612;
+  overflow: hidden;
+}
+
+/* Vermilion seal stamp anchored to the upper-right corner of the hero. */
+.qp-hero::after {
+  content: "印";
+  position: absolute;
+  top: 22px;
+  right: 28px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f5efdc;
+  background: #bd3f29;
+  border: 2px solid #8c2c1c;
+  transform: rotate(-6deg);
+  box-shadow: inset 0 0 0 2px #bd3f29;
+  letter-spacing: 0;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.92;
+}
+
+.qp-hero__eyebrow {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #8c2c1c;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.qp-hero__title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  letter-spacing: -0.3px;
+  color: #1a1612;
+}
+
+.qp-hero__sub {
+  font-size: 13px;
+  color: #544a40;
+  max-width: 780px;
+  line-height: 1.65;
+}
+
+.qp-hero__metrics {
+  display: flex;
+  gap: 36px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+  padding-top: 16px;
+  border-top: 1px dotted #c4b48f;
+}
+
+.qp-hero__metric-label {
+  font-size: 11px;
+  color: #8a7f6f;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.qp-hero__metric-value {
+  font-size: 24px;
+  font-weight: 500;
+  margin-top: 2px;
+  color: #1a1612;
+  font-family: "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    Georgia, "Times New Roman", serif;
+  letter-spacing: -0.3px;
+}
+
+.qp-hero__metric-value--gain {
+  color: #3f6b48;
+}
+.qp-hero__metric-value--loss {
+  color: #bd3f29;
+}
+
+/* ----- KPI cells ----------------------------------------------------- */
+
+.qp-kpi {
+  background: #fdf9ee;
+  border: 1px solid #dccfb2;
+  border-left: 2px solid #c4b48f;
+  border-radius: 2px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.15s ease;
+}
+.qp-kpi:hover {
+  border-color: #c4b48f;
+  border-left-color: #bd3f29;
+}
+.qp-kpi__label {
+  font-size: 11px;
+  color: #8a7f6f;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.qp-kpi__value {
+  font-size: 22px;
+  font-weight: 500;
+  color: #1a1612;
+  font-family: "Songti SC", "Source Han Serif SC", Georgia, serif;
+  letter-spacing: -0.3px;
+}
+.qp-kpi__delta {
+  font-size: 11px;
+  color: #8a7f6f;
+}
+.qp-kpi--positive {
+  border-left-color: #3f6b48;
+}
+.qp-kpi--positive .qp-kpi__value {
+  color: #3f6b48;
+}
+.qp-kpi--negative {
+  border-left-color: #bd3f29;
+}
+.qp-kpi--negative .qp-kpi__value {
+  color: #bd3f29;
+}
+
+/* ----- Misc ---------------------------------------------------------- */
+
+.qp-monaco {
+  border: 1px solid #dccfb2;
+  border-radius: 2px;
+  overflow: hidden;
+  background: #1a1612;
+}
+
+.qp-sparkline {
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 0;
+}
+
+.qp-link {
+  color: #8c2c1c;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(189, 63, 41, 0.3);
+}
+.qp-link:hover {
+  color: #bd3f29;
+  border-bottom-color: #bd3f29;
+}
+
+.qp-divider-dotted {
+  border: 0;
+  border-top: 1px dotted #c4b48f;
+  margin: 16px 0;
+}
+
+/* Soft override of antd Card so cards sit on the paper texture cleanly */
+.ant-card {
+  background: #fdf9ee;
+  border-color: #dccfb2 !important;
+}
+.ant-card-head {
+  border-bottom: 1px solid #e7dcc4 !important;
+}
+
+/* Subtle vertical hairline before card titles, like a margin rule on paper */
+.ant-card > .ant-card-head .ant-card-head-title {
+  position: relative;
+}
+
+/* Tweak Tag default for a more paper-print look */
+.ant-tag {
+  border-radius: 2px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* Buttons: square-ish, less corporate */
+.ant-btn {
+  border-radius: 3px;
+  font-weight: 500;
+}

@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.eggs/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments
+.env
+.env.local
+.env.*.local
+
+# Frontend
+node_modules/
+dist/
+build/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Quantpilot data
+backend/data/runs/
+backend/data/cache/
+*.parquet
+*.duckdb
+*.sqlite
+*.db
+!backend/data/runs/.gitkeep
+!backend/data/strategies/.gitkeep
+!backend/data/market/.gitkeep
