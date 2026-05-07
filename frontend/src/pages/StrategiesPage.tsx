@@ -6,10 +6,10 @@ import {
   Typography,
   Button,
   Space,
-  Tooltip,
   App as AntdApp,
   Alert,
   Form,
+  Input,
   InputNumber,
   Empty,
   Row,
@@ -22,38 +22,18 @@ import {
   CodeOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Editor from "@monaco-editor/react";
-import { api, StrategyTemplate } from "../services/api";
+import { api, SaveUserStrategyRequest, StrategyTemplate } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
 import { QPColors } from "../theme";
 
 const { Title, Paragraph } = Typography;
+const { TextArea } = Input;
 
-const SAMPLE_CODE = `# 内置双均线策略示例（只读演示）
-# 后端真正的执行版本位于 app/strategy/templates/dual_ma.py
-from app.strategy.base import Strategy, StrategyContext
+const BUILTIN_IDS = new Set(["dual_ma", "rsi_reversion", "macd_cross"]);
 
-
-class DualMovingAverageStrategy(Strategy):
-    def initialize(self, params):
-        self.short_window = int(params["short_window"])
-        self.long_window = int(params["long_window"])
-        self.target_percent = float(params["target_percent"])
-        self.history = []
-        self.last_signal = 0
-
-    def on_bar(self, ctx: StrategyContext):
-        self.history.append(ctx.bar.close)
-        if len(self.history) < self.long_window:
-            return
-        short_ma = sum(self.history[-self.short_window:]) / self.short_window
-        long_ma = sum(self.history[-self.long_window:]) / self.long_window
-        signal = 1 if short_ma > long_ma else -1
-        if signal != self.last_signal:
-            ctx.order_target_percent(self.target_percent if signal == 1 else 0.0)
-            self.last_signal = signal
-`;
+const SAMPLE_CODE = "";
 
 interface SchemaProperty {
   type: string;
@@ -61,6 +41,13 @@ interface SchemaProperty {
   default?: number;
   minimum?: number;
   maximum?: number;
+}
+
+interface SaveFormValues {
+  id: string;
+  title: string;
+  description: string;
+  schemaJson: string;
 }
 
 const renderSchemaForm = (schema: any) => {
@@ -94,6 +81,8 @@ const renderSchemaForm = (schema: any) => {
 const StrategiesPage: React.FC = () => {
   const { message } = AntdApp.useApp();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [saveForm] = Form.useForm<SaveFormValues>();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [code, setCode] = useState(SAMPLE_CODE);
 
@@ -101,6 +90,14 @@ const StrategiesPage: React.FC = () => {
     queryKey: ["templates"],
     queryFn: api.listStrategyTemplates,
   });
+
+  const templateDetailQuery = useQuery({
+    queryKey: ["strategy-template", selectedId],
+    queryFn: () => api.getStrategyTemplate(selectedId as string),
+    enabled: Boolean(selectedId),
+    retry: false,
+  });
+  const selectedIsUserStrategy = Boolean(selectedId && !BUILTIN_IDS.has(selectedId));
 
   useEffect(() => {
     const list = templatesQuery.data?.templates ?? [];
@@ -113,18 +110,60 @@ const StrategiesPage: React.FC = () => {
     (t) => t.id === selectedId,
   );
 
+  useEffect(() => {
+    if (!selected || !templateDetailQuery.data) return;
+    setCode(templateDetailQuery.data.code ?? "");
+    saveForm.setFieldsValue({
+      id: selectedIsUserStrategy ? selected.id : `${selected.id}_custom`,
+      title: selectedIsUserStrategy ? selected.title : `${selected.title} 副本`,
+      description: selected.description,
+      schemaJson: JSON.stringify(templateDetailQuery.data.params_schema, null, 2),
+    });
+  }, [selected, selectedIsUserStrategy, templateDetailQuery.data, saveForm]);
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: SaveUserStrategyRequest) => api.saveUserStrategy(payload),
+    onSuccess: async (saved) => {
+      message.success(`策略已保存：${saved.id}`);
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
+      await queryClient.invalidateQueries({ queryKey: ["strategy-template", saved.id] });
+      setSelectedId(saved.id);
+    },
+    onError: (error: unknown) => {
+      message.error(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+    },
+  });
+
+  const handleSave = (values: SaveFormValues) => {
+    let paramsSchema: Record<string, unknown>;
+    try {
+      paramsSchema = JSON.parse(values.schemaJson || "{}") as Record<string, unknown>;
+    } catch {
+      message.warning("参数 schema 必须是合法 JSON");
+      return;
+    }
+    saveMutation.mutate({
+      id: values.id,
+      title: values.title,
+      description: values.description ?? "",
+      code,
+      params_schema: paramsSchema,
+      overwrite: selectedIsUserStrategy && selectedId === values.id,
+    });
+  };
+
   return (
     <div className="qp-page">
       <PageHeader
         title="策略"
-        subtitle="基于内置模板和指标库快速搭建策略；版本管理、Git 集成与多用户保存正在规划中。"
-        badge={<span className="qp-pill qp-pill--mock">编辑器只读演示</span>}
+        subtitle="基于内置模板和指标库快速搭建策略；本地 MVP 支持保存可信 Python 策略并用于回测。"
+        badge={<span className="qp-pill qp-pill--mock">本地可信执行</span>}
       />
 
       <Alert
         type="info"
         showIcon
-        message="MVP 阶段，策略代码以后端内置模板为准。Monaco 编辑器已就绪，等到 Phase 2 接入策略保存接口后即可在浏览器中编写并运行用户自定义策略。"
+        message="当前保存的用户策略会写入后端 data/strategies，并进入回测模板列表。多用户或共享环境上线前必须先接入沙箱、资源限制和依赖白名单。"
       />
 
       <Row gutter={[16, 16]}>
@@ -200,11 +239,13 @@ const StrategiesPage: React.FC = () => {
           extra={
             selected && (
               <Space>
-                <Tooltip title="保存接口将在 Phase 2 落地">
-                  <Button icon={<SaveOutlined />} disabled>
-                    保存为我的策略
-                  </Button>
-                </Tooltip>
+                <Button
+                  icon={<SaveOutlined />}
+                  loading={saveMutation.isPending}
+                  onClick={() => saveForm.submit()}
+                >
+                  {selectedIsUserStrategy ? "保存修改" : "保存为我的策略"}
+                </Button>
                 <Button
                   type="primary"
                   icon={<ThunderboltOutlined />}
@@ -227,9 +268,41 @@ const StrategiesPage: React.FC = () => {
                 {selected.description}
               </Paragraph>
 
+              <Form<SaveFormValues>
+                form={saveForm}
+                layout="vertical"
+                onFinish={handleSave}
+                style={{ marginTop: 12 }}
+              >
+                <div className="qp-form-grid">
+                  <Form.Item
+                    label="策略 ID"
+                    name="id"
+                    rules={[
+                      { required: true, message: "请输入策略 ID" },
+                      {
+                        pattern: /^[a-z][a-z0-9_]{2,63}$/,
+                        message: "仅支持小写字母、数字、下划线，且以字母开头",
+                      },
+                    ]}
+                  >
+                    <Input disabled={selectedIsUserStrategy} />
+                  </Form.Item>
+                  <Form.Item
+                    label="策略名称"
+                    name="title"
+                    rules={[{ required: true, message: "请输入策略名称" }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </div>
+                <Form.Item label="策略描述" name="description">
+                  <Input />
+                </Form.Item>
+
               <Title level={5} style={{ marginTop: 16 }}>
                 <CodeOutlined style={{ marginRight: 6 }} />
-                参考实现
+                Python 策略代码
               </Title>
               <div className="qp-monaco">
                 <Editor
@@ -244,7 +317,7 @@ const StrategiesPage: React.FC = () => {
                     minimap: { enabled: false },
                     fontSize: 12.5,
                     scrollBeyondLastLine: false,
-                    readOnly: false,
+                    readOnly: saveMutation.isPending,
                     smoothScrolling: true,
                     renderLineHighlight: "gutter",
                   }}
@@ -254,6 +327,13 @@ const StrategiesPage: React.FC = () => {
               <Title level={5} style={{ marginTop: 16 }}>
                 参数 schema
               </Title>
+              <Form.Item
+                name="schemaJson"
+                tooltip="保存时会作为 params_schema 提交，回测页根据该 schema 动态渲染参数"
+              >
+                <TextArea rows={8} className="qp-mono" />
+              </Form.Item>
+              </Form>
               {renderSchemaForm(selected.params_schema) ?? (
                 <span className="qp-muted">该模板未声明参数</span>
               )}

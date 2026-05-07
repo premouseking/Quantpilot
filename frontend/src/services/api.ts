@@ -9,6 +9,11 @@ export interface StrategyTemplate {
   title: string;
   description: string;
   params_schema: Record<string, unknown>;
+  code?: string;
+}
+
+export interface UserStrategyTemplate extends StrategyTemplate {
+  code: string;
 }
 
 export interface DataProvider {
@@ -156,6 +161,15 @@ export interface BacktestRunRequest {
   };
 }
 
+export interface SaveUserStrategyRequest {
+  id: string;
+  title: string;
+  description: string;
+  code: string;
+  params_schema: Record<string, unknown>;
+  overwrite?: boolean;
+}
+
 export const api = {
   health: () => apiClient.get<{ status: string }>("/api/health"),
   runtime: () => apiClient.get<RuntimeInfo>("/api/runtime"),
@@ -193,6 +207,10 @@ export const api = {
     apiClient.get<{ templates: StrategyTemplate[] }>("/api/strategies/templates"),
   getStrategyTemplate: (id: string) =>
     apiClient.get<StrategyTemplate>(`/api/strategies/templates/${id}`),
+  saveUserStrategy: (payload: SaveUserStrategyRequest) =>
+    apiClient.post<StrategyTemplate>("/api/strategies/user", payload),
+  getUserStrategy: (id: string) =>
+    apiClient.get<UserStrategyTemplate>(`/api/strategies/user/${id}`),
   runBacktest: (payload: BacktestRunRequest) =>
     apiClient.post<BacktestRunEnvelope>("/api/backtests/runs", payload),
   listBacktestRuns: () =>

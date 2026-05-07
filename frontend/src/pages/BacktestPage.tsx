@@ -34,7 +34,7 @@ import {
 import dayjs, { Dayjs } from "dayjs";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api, BacktestRunRequest } from "../services/api";
+import { api, BacktestRunRequest, StrategyTemplate } from "../services/api";
 import { ApiError } from "../services/apiClient";
 import { PageHeader } from "../components/PageHeader";
 import { QPColors } from "../theme";
@@ -50,12 +50,24 @@ interface FormValues {
   symbol: string;
   range: [Dayjs, Dayjs];
   initialCash: number;
-  shortWindow: number;
-  longWindow: number;
-  targetPercent: number;
+  strategyParams: Record<string, number>;
   commissionRate: number;
   stampTaxRate: number;
   slippageBps: number;
+}
+
+interface SchemaProperty {
+  type?: string;
+  title?: string;
+  default?: number;
+  minimum?: number;
+  maximum?: number;
+}
+
+interface StrategyParamsSchema {
+  title?: string;
+  properties?: Record<string, SchemaProperty>;
+  required?: string[];
 }
 
 /** 初始表单值与演示口径；调整时请与后端示例/文档保持一致 */
@@ -65,12 +77,33 @@ const DEFAULTS: FormValues = {
   symbol: "MOCK001",
   range: [dayjs("2023-01-01"), dayjs("2024-12-31")],
   initialCash: 1_000_000,
-  shortWindow: 5,
-  longWindow: 20,
-  targetPercent: 0.95,
+  strategyParams: {
+    short_window: 5,
+    long_window: 20,
+    target_percent: 0.95,
+  },
   commissionRate: 0.0003,
   stampTaxRate: 0.001,
   slippageBps: 5,
+};
+
+const getParamsSchema = (template?: StrategyTemplate): StrategyParamsSchema => {
+  return (template?.params_schema ?? {}) as StrategyParamsSchema;
+};
+
+const buildDefaultStrategyParams = (
+  template?: StrategyTemplate,
+): Record<string, number> => {
+  const properties = getParamsSchema(template).properties ?? {};
+  return Object.fromEntries(
+    Object.entries(properties).map(([key, prop]) => [key, Number(prop.default ?? 0)]),
+  );
+};
+
+const formatParamValue = (value: unknown) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "—";
+  if (value > 0 && value <= 1) return fmtPercent(value, 0);
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)));
 };
 
 /** 时间区间快捷填充配置（仅更新表单，不发请求） */
@@ -91,6 +124,7 @@ const BacktestPage: React.FC = () => {
   // --- 服务端枚举：数据源、策略模板 ---
   const providersQuery = useQuery({ queryKey: ["providers"], queryFn: api.listProviders });
   const templatesQuery = useQuery({ queryKey: ["templates"], queryFn: api.listStrategyTemplates });
+  const templates = templatesQuery.data?.templates ?? [];
 
   // --- 标的列表：随所选数据源联动 ---
   const provider = Form.useWatch("provider", form) ?? DEFAULTS.provider;
@@ -113,14 +147,22 @@ const BacktestPage: React.FC = () => {
   // --- 侧栏预览：监听相关字段，随表单变更即时刷新 ---
   const watchedSymbol = Form.useWatch("symbol", form) ?? DEFAULTS.symbol;
   const watchedTemplate = Form.useWatch("templateId", form) ?? DEFAULTS.templateId;
+  const watchedStrategyParams =
+    Form.useWatch("strategyParams", form) ?? DEFAULTS.strategyParams;
   const watchedRange = Form.useWatch("range", form) ?? DEFAULTS.range;
   const watchedCash = Form.useWatch("initialCash", form) ?? DEFAULTS.initialCash;
-  const watchedShort = Form.useWatch("shortWindow", form) ?? DEFAULTS.shortWindow;
-  const watchedLong = Form.useWatch("longWindow", form) ?? DEFAULTS.longWindow;
-  const watchedTarget = Form.useWatch("targetPercent", form) ?? DEFAULTS.targetPercent;
+  const watchedTarget =
+    Number(watchedStrategyParams.target_percent ?? DEFAULTS.strategyParams.target_percent);
   const watchedCommission = Form.useWatch("commissionRate", form) ?? DEFAULTS.commissionRate;
   const watchedStamp = Form.useWatch("stampTaxRate", form) ?? DEFAULTS.stampTaxRate;
   const watchedSlippage = Form.useWatch("slippageBps", form) ?? DEFAULTS.slippageBps;
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === watchedTemplate),
+    [templates, watchedTemplate],
+  );
+  const selectedSchema = useMemo(() => getParamsSchema(selectedTemplate), [selectedTemplate]);
+  const selectedProperties = selectedSchema.properties ?? {};
+  const requiredParams = new Set(selectedSchema.required ?? []);
 
   // --- 深链：URL ?template= 预填策略模板 ---
   useEffect(() => {
@@ -129,6 +171,13 @@ const BacktestPage: React.FC = () => {
       form.setFieldsValue({ templateId: tplId });
     }
   }, [searchParams, form]);
+
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    form.setFieldsValue({
+      strategyParams: buildDefaultStrategyParams(selectedTemplate),
+    });
+  }, [selectedTemplate, form]);
 
   // --- 回测提交：成功跳转报告；失败时全局提示（message）与页面 Alert ---
   const runMutation = useMutation({
@@ -145,10 +194,6 @@ const BacktestPage: React.FC = () => {
 
   /** 将表单值转换为 API 载荷（日期归一到日起止 ISO，成本模型固定最小佣金与后端约定一致） */
   const handleSubmit = (values: FormValues) => {
-    if (values.shortWindow >= values.longWindow) {
-      message.warning("短均线窗口必须小于长均线窗口");
-      return;
-    }
     const [start, end] = values.range;
     const payload: BacktestRunRequest = {
       template_id: values.templateId,
@@ -158,11 +203,7 @@ const BacktestPage: React.FC = () => {
       frequency: "daily",
       initial_cash: values.initialCash,
       data_provider: values.provider,
-      strategy_params: {
-        short_window: values.shortWindow,
-        long_window: values.longWindow,
-        target_percent: values.targetPercent,
-      },
+      strategy_params: values.strategyParams,
       cost_model: {
         commission_rate: values.commissionRate,
         min_commission: 5,
@@ -174,6 +215,7 @@ const BacktestPage: React.FC = () => {
   };
 
   const isLoading = runMutation.isPending;
+  const strategyParamEntries = Object.entries(selectedProperties);
 
   /**
    * Steps.current：与 Ant Design Steps 索引对齐。
@@ -251,7 +293,7 @@ const BacktestPage: React.FC = () => {
                 <Form.Item label="策略模板" name="templateId" required>
                   <Select
                     loading={templatesQuery.isLoading}
-                    options={(templatesQuery.data?.templates ?? []).map((t) => ({
+                    options={templates.map((t) => ({
                       value: t.id,
                       label: t.title,
                     }))}
@@ -322,18 +364,43 @@ const BacktestPage: React.FC = () => {
               </Space>
 
               <Divider />
-              <div className="qp-section-title">策略参数（双均线）</div>
-              <div className="qp-form-grid">
-                <Form.Item label="短均线窗口" name="shortWindow">
-                  <InputNumber min={1} max={500} style={{ width: "100%" }} />
-                </Form.Item>
-                <Form.Item label="长均线窗口" name="longWindow">
-                  <InputNumber min={2} max={1000} style={{ width: "100%" }} />
-                </Form.Item>
-                <Form.Item label="目标仓位比例" name="targetPercent">
-                  <InputNumber min={0.01} max={1} step={0.05} style={{ width: "100%" }} />
-                </Form.Item>
+              <div className="qp-section-title">
+                策略参数{selectedSchema.title ? `（${selectedSchema.title}）` : ""}
               </div>
+              {strategyParamEntries.length > 0 ? (
+                <div className="qp-form-grid">
+                  {strategyParamEntries.map(([key, prop]) => (
+                    <Form.Item
+                      key={`${watchedTemplate}-${key}`}
+                      label={prop.title ?? key}
+                      name={["strategyParams", key]}
+                      rules={[
+                        {
+                          required: requiredParams.has(key),
+                          message: `请输入${prop.title ?? key}`,
+                        },
+                      ]}
+                      tooltip={`${prop.type ?? "number"}${
+                        prop.minimum !== undefined ? `, ≥ ${prop.minimum}` : ""
+                      }${prop.maximum !== undefined ? `, ≤ ${prop.maximum}` : ""}`}
+                    >
+                      <InputNumber
+                        min={prop.minimum}
+                        max={prop.maximum}
+                        step={prop.type === "integer" ? 1 : 0.01}
+                        precision={prop.type === "integer" ? 0 : undefined}
+                        style={{ width: "100%" }}
+                      />
+                    </Form.Item>
+                  ))}
+                </div>
+              ) : (
+                <Alert
+                  type="info"
+                  showIcon
+                  message="该策略模板未声明参数，可直接运行。"
+                />
+              )}
 
               <Divider />
               <div className="qp-section-title">交易成本</div>
@@ -382,7 +449,12 @@ const BacktestPage: React.FC = () => {
               <Space direction="vertical" style={{ width: "100%" }} size={10}>
                 <PreviewRow
                   label="策略"
-                  value={<Tag bordered={false}>{watchedTemplate}</Tag>}
+                  value={
+                    <Space size={4}>
+                      <Tag bordered={false}>{selectedTemplate?.title ?? watchedTemplate}</Tag>
+                      <Tag bordered={false}>{watchedTemplate}</Tag>
+                    </Space>
+                  }
                 />
                 <PreviewRow
                   label="标的 / 数据源"
@@ -427,7 +499,23 @@ const BacktestPage: React.FC = () => {
 
             <Card title="成本估算" size="small">
               <Space direction="vertical" style={{ width: "100%" }} size={10}>
-                <PreviewRow label="均线窗口" value={`${watchedShort} / ${watchedLong}`} />
+                <PreviewRow
+                  label="策略参数"
+                  value={
+                    <Space size={[4, 4]} wrap style={{ justifyContent: "flex-end" }}>
+                      {strategyParamEntries.length === 0 ? (
+                        <span className="qp-muted">无</span>
+                      ) : (
+                        strategyParamEntries.map(([key, prop]) => (
+                          <Tag key={key} bordered={false}>
+                            {(prop.title ?? key).replace("（占权益）", "")}:{" "}
+                            {formatParamValue(watchedStrategyParams[key])}
+                          </Tag>
+                        ))
+                      )}
+                    </Space>
+                  }
+                />
                 <PreviewRow
                   label="单边费率"
                   value={fmtPercent(watchedCommission + watchedSlippage / 10000, 3)}
