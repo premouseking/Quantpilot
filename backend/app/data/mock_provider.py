@@ -7,6 +7,7 @@ for end-to-end tests and demos when no real data is available.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from hashlib import blake2b
 
 import numpy as np
 import pandas as pd
@@ -16,13 +17,13 @@ from app.core.errors import DataMissingError, InvalidParamsError
 from .models import Frequency
 from .provider import DataProvider
 
-
 _DEFAULT_SYMBOLS = ("MOCK001", "MOCK002", "MOCK003")
 
 
 def _seed_for(symbol: str) -> int:
     """Stable per-symbol seed so repeated runs are reproducible."""
-    return abs(hash(symbol)) % (2**31 - 1)
+    digest = blake2b(symbol.encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, "big") % (2**31 - 1)
 
 
 def _step_for(frequency: Frequency) -> timedelta:
