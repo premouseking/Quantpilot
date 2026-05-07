@@ -9,17 +9,16 @@ The functions are pure: same input -> same output, no I/O.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from math import sqrt
-from typing import Sequence
 
 import numpy as np
 import pandas as pd
 
 from app.engine.events import Fill, OrderSide
 from app.engine.portfolio import EquityPoint
-
 
 DEFAULT_PERIODS_PER_YEAR = 252
 
