@@ -1,6 +1,6 @@
-"""Domain models for market data.
+"""行情领域模型。
 
-Bar is the MVP unit. Tick is reserved as an interface placeholder.
+当前 MVP 以 K 线（Bar）为最小粒度；Tick 级接口预留为未来扩展位。
 """
 
 from __future__ import annotations
@@ -23,10 +23,10 @@ class Frequency(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class Bar:
-    """OHLCV bar.
+    """单根 OHLCV K 线。
 
-    All numeric fields are floats. ``timestamp`` is timezone-naive but is
-    expected to be in market-local time (e.g. Asia/Shanghai for A-share).
+    数值字段均为 float；``timestamp`` 为无时区 naive datetime，
+    预期与标的所在市场本地时区一致（如 A 股可用 Asia/Shanghai 语义）。
     """
 
     symbol: str
@@ -45,9 +45,9 @@ class Bar:
 
 
 def bars_from_dataframe(df: pd.DataFrame, symbol: str) -> list[Bar]:
-    """Convert a normalized DataFrame to a list of Bar objects.
+    """将已规整的 DataFrame 转为 ``Bar`` 列表。
 
-    Expects columns: timestamp, open, high, low, close, volume.
+    必需列：timestamp, open, high, low, close, volume。
     """
     required = {"timestamp", "open", "high", "low", "close", "volume"}
     missing = required - set(df.columns)

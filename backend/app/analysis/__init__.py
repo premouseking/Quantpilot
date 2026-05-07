@@ -1,1 +1,1 @@
-"""Performance metrics and report generation."""
+"""绩效指标计算与回测报告组装。"""

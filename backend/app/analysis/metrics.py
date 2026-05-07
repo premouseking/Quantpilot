@@ -1,10 +1,9 @@
-"""Performance metrics.
+"""回测绩效指标。
 
-All metrics are computed from a daily-or-finer equity curve. Time scaling uses
-``periods_per_year`` so that minute-bar backtests can pass an appropriate
-annualization factor (e.g. 252 * 240 for A-share minute bars).
+基于日频或更细颗粒度的权益曲线；年化缩放依赖 ``periods_per_year``，
+以便分钟级回测传入 A 股等适用的年化因子（如 252×240）。
 
-The functions are pure: same input -> same output, no I/O.
+函数均为纯函数：相同输入确定性输出，无副作用与 I/O。
 """
 
 from __future__ import annotations
@@ -116,7 +115,7 @@ def sortino_ratio(returns: pd.Series, periods_per_year: int, risk_free: float = 
 
 
 def max_drawdown(equity: pd.Series) -> tuple[float, datetime | None, datetime | None]:
-    """Return (max drawdown as negative number, peak time, trough time)."""
+    """返回 (最大回撤，负值；峰值时间；谷值时间)。"""
     if equity.empty:
         return 0.0, None, None
     cumulative_max = equity.cummax()
@@ -135,7 +134,7 @@ def calmar_ratio(annualized: float, mdd: float) -> float:
 
 
 def trade_stats(fills: Sequence[Fill]) -> tuple[int, float, float]:
-    """Pair fills FIFO into round-trip trades and return (count, win_rate, pl_ratio)."""
+    """将成交按 FIFO 配对为完整回合，返回 (笔数, 胜率, 盈亏比)。"""
     if not fills:
         return 0, 0.0, 0.0
 

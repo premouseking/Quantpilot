@@ -1,4 +1,4 @@
-"""Portfolio: cash, positions, mark-to-market equity, equity curve."""
+"""组合：现金、持仓、按市值计价权益与权益曲线。"""
 
 from __future__ import annotations
 
@@ -31,11 +31,10 @@ class EquityPoint:
 
 @dataclass
 class Portfolio:
-    """Single-account portfolio state.
+    """单账户组合状态。
 
-    Costs (commission, stamp tax) reduce cash on every fill. Average cost is
-    weighted on buys; sells reduce quantity but keep average cost untouched
-    until quantity hits zero.
+    每笔成交的佣金与印花税从现金扣减；买入按加权平均更新成本价；
+    卖出减少数量，在数量归零前不重置均价。
     """
 
     initial_cash: float

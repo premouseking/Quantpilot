@@ -1,12 +1,8 @@
-"""CSV-backed data provider.
+"""基于 CSV 文件的行情实现。
 
-Layout convention:
-
-    <market_dir>/<frequency>/<symbol>.csv
-
-Each CSV must contain at least the columns: timestamp, open, high, low, close,
-volume. Column names are matched case-insensitively. Date parsing is tolerant
-of common formats (ISO, ``YYYY-MM-DD``, ``YYYY/MM/DD HH:MM:SS``).
+目录约定：``<market_dir>/<frequency>/<symbol>.csv``
+每份 CSV 至少包含：timestamp, open, high, low, close, volume（列名大小写不敏感）。
+日期解析兼容常见格式（ISO、``YYYY-MM-DD``、``YYYY/MM/DD HH:MM:SS`` 等）。
 """
 
 from __future__ import annotations

@@ -1,7 +1,6 @@
-"""Unified error envelope.
+"""统一错误信封（ErrorEnvelope）。
 
-One shape for all backend errors so the frontend can render a single error
-component and route handlers can stay free of ad-hoc error formatting.
+所有后端异常采用同一 JSON 形状，前端可共用一套错误展示；路由层无需各自拼接格式。
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ class ErrorEnvelope(BaseModel):
 
 
 class QuantpilotError(Exception):
-    """Base class for typed application errors."""
+    """带 ErrorCode 的类型化业务异常基类。"""
 
     def __init__(
         self,

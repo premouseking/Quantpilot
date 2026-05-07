@@ -11,8 +11,8 @@ interface Props {
 }
 
 /**
- * Tiny inline-SVG sparkline. Pure rendering, no chart library needed,
- * so it stays cheap when rendered in dozens of table rows.
+ * 微型内联 SVG 折线 sparkline：纯渲染、零图表库依赖，
+ * 适合在表格等高密度列表中批量挂载而不明显拖慢首屏。
  */
 export const Sparkline: React.FC<Props> = ({
   values,

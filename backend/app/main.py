@@ -1,8 +1,7 @@
-"""FastAPI application entrypoint.
+"""FastAPI 应用入口。
 
-The app is intentionally minimal: only wires routers, CORS, error handling,
-and structured logging. Long-running computation lives in services and the
-engine, not in route handlers.
+组装路由、CORS、统一异常处理与结构化日志；刻意保持薄层。
+耗时计算放在服务层与回测引擎中，路由处理函数不包含重型逻辑。
 """
 
 from __future__ import annotations

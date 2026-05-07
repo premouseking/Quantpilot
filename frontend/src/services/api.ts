@@ -1,4 +1,6 @@
-// Typed API endpoints used by the UI. Matches backend schemas.
+/**
+ * 前端可调用的类型化 API：路径与载荷形状与后端 Pydantic Schema 对齐。
+ */
 
 import { apiClient } from "./apiClient";
 
@@ -78,6 +80,13 @@ export interface BarsResponse {
   frequency: string;
   count: number;
   bars: Bar[];
+}
+
+export interface MarketCsvUploadResponse {
+  saved_path: string;
+  symbol: string;
+  frequency: string;
+  row_count: number;
 }
 
 export interface RuntimeInfo {
@@ -170,6 +179,16 @@ export const api = {
       frequency: params.frequency ?? "daily",
       limit: params.limit ?? 1000,
     }),
+  uploadMarketCsv: (params: { symbol: string; frequency: string; file: File }) => {
+    const fd = new FormData();
+    fd.append("symbol", params.symbol);
+    fd.append("frequency", params.frequency);
+    fd.append("file", params.file);
+    return apiClient.post<MarketCsvUploadResponse>(
+      "/api/data/providers/csv/upload",
+      fd,
+    );
+  },
   listStrategyTemplates: () =>
     apiClient.get<{ templates: StrategyTemplate[] }>("/api/strategies/templates"),
   getStrategyTemplate: (id: string) =>

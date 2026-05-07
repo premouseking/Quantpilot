@@ -1,1 +1,1 @@
-"""Pydantic schemas for API requests and responses."""
+"""回测相关 Pydantic 请求/响应模型。"""

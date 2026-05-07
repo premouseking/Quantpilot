@@ -1,7 +1,6 @@
-"""Mock data provider.
+"""Mock 数据源：以固定种子生成可复现的合成 OHLCV。
 
-Deterministic synthetic OHLCV generated from a seeded random walk. Useful
-for end-to-end tests and demos when no real data is available.
+用于无真实行情时的联调演示与端到端测试。
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ _DEFAULT_SYMBOLS = ("MOCK001", "MOCK002", "MOCK003")
 
 
 def _seed_for(symbol: str) -> int:
-    """Stable per-symbol seed so repeated runs are reproducible."""
+    """按标的派生稳定随机种子，保证同 symbol 多次运行结果一致。"""
     return abs(hash(symbol)) % (2**31 - 1)
 
 
@@ -42,7 +41,7 @@ def _step_for(frequency: Frequency) -> timedelta:
 
 
 class MockDataProvider(DataProvider):
-    """Generate synthetic bars with a geometric random walk."""
+    """几何随机游走生成合成 K 线。"""
 
     name = "mock"
 

@@ -1,4 +1,4 @@
-"""Indicator unit tests."""
+"""技术指标单元测试。"""
 
 from __future__ import annotations
 

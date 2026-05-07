@@ -1,14 +1,12 @@
-"""Event-driven backtest main loop.
+"""事件驱动回测主循环（Bar 级）。
 
-MVP scope:
-- Single-symbol, Bar-level loop.
-- Strategies emit market orders via ``ctx.order_target_percent`` /
-  ``ctx.submit_order``; the broker fills at the current bar's close with
-  configured slippage.
-- Equity curve is sampled at every bar using last-known prices.
+MVP 范围：
+- 单标的、按 Bar 推进；
+- 策略通过 ``ctx.order_target_percent`` / ``ctx.submit_order`` 发市价单；
+  经纪商在当前 Bar 收盘价加滑点后成交；
+- 每个 Bar 用最新价更新权益曲线采样点。
 
-Out of scope for MVP: multi-symbol portfolio, limit orders, intra-bar fills,
-margin, short selling, after-hours events.
+非 MVP：多标的、限价单、Bar 内成交、融券卖空、杠杆、盘后事件等。
 """
 
 from __future__ import annotations
@@ -58,8 +56,7 @@ class BacktestResult:
 
 
 class _BoundRouter:
-    """Adapter that wires StrategyContext calls into the broker with
-    per-bar timestamp and reference price baked in."""
+    """将 ``StrategyContext`` 的下单调用绑定到经纪商，并注入当 Bar 时间戳与参考价。"""
 
     def __init__(self, broker: SimulatedBroker) -> None:
         self._broker = broker
@@ -109,7 +106,7 @@ class _BoundRouter:
 def _benchmark_curve(
     bars: list[Bar], initial_value: float
 ) -> list[EquityPoint]:
-    """Return a buy-and-hold benchmark curve normalized to ``initial_value``."""
+    """买入并持有基准曲线，按 ``initial_value`` 归一化到与组合可比的名义规模。"""
     if not bars:
         return []
     base_price = bars[0].close
@@ -134,7 +131,7 @@ def run_backtest(
     data_provider: DataProvider,
     benchmark_provider: DataProvider | None = None,
 ) -> BacktestResult:
-    """Execute a single backtest end-to-end."""
+    """端到端执行单次回测：拉数 → 策略循环 → 绩效快照。"""
     if config.start > config.end:
         raise InvalidParamsError("start must be <= end")
     if config.initial_cash <= 0:

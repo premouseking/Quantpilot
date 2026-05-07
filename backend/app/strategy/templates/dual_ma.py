@@ -1,7 +1,6 @@
-"""Dual moving average crossover strategy.
+"""双均线交叉策略（仅做多）。
 
-Long-only. When the short SMA crosses above the long SMA, hold ``target_percent``
-of total equity. When it crosses below, exit to cash.
+短均线上穿长均线时持仓至 ``target_percent`` 权益比例；下穿时清仓为现金。
 """
 
 from __future__ import annotations
@@ -66,23 +65,23 @@ class DualMovingAverageStrategy(Strategy):
 
 PARAMS_SCHEMA = {
     "type": "object",
-    "title": "Dual Moving Average",
+    "title": "双均线",
     "properties": {
         "short_window": {
             "type": "integer",
-            "title": "Short window",
+            "title": "短周期窗口",
             "minimum": 1,
             "default": 5,
         },
         "long_window": {
             "type": "integer",
-            "title": "Long window",
+            "title": "长周期窗口",
             "minimum": 2,
             "default": 20,
         },
         "target_percent": {
             "type": "number",
-            "title": "Target equity %",
+            "title": "目标仓位（占权益）",
             "minimum": 0.01,
             "maximum": 1.0,
             "default": 0.95,

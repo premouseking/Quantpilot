@@ -1,1 +1,1 @@
-"""Domain service layer."""
+"""领域服务层（编排用例，不写 HTTP）。"""

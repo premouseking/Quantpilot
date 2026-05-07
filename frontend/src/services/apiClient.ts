@@ -1,4 +1,6 @@
-// Unified HTTP client. Centralizes base URL, JSON encoding, and error envelopes.
+/**
+ * 统一 HTTP 客户端：封装基址拼接、JSON 序列化及后端标准错误信封（ErrorEnvelope）解析。
+ */
 
 import { runtimeConfig } from "../runtimeConfig";
 
@@ -51,15 +53,26 @@ export async function apiFetch<TResponse>(
   path: string,
   options: RequestOptions = {},
 ): Promise<TResponse> {
-  const { body, query, headers, ...rest } = options;
+  const { body, query, headers: headersInit, ...rest } = options;
   const url = joinUrl(runtimeConfig.apiBaseUrl, path) + buildQuery(query);
+
+  const headers: HeadersInit =
+    body instanceof FormData
+      ? { Accept: "application/json", ...(headersInit || {}) }
+      : { ...DEFAULT_HEADERS, ...(headersInit || {}) };
 
   const init: RequestInit = {
     ...rest,
-    headers: { ...DEFAULT_HEADERS, ...(headers || {}) },
+    headers,
   };
   if (body !== undefined) {
-    init.body = typeof body === "string" ? body : JSON.stringify(body);
+    if (typeof body === "string") {
+      init.body = body;
+    } else if (body instanceof FormData) {
+      init.body = body;
+    } else {
+      init.body = JSON.stringify(body);
+    }
   }
 
   let response: Response;

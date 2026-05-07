@@ -1,4 +1,4 @@
-"""End-to-end backtest test using the dual MA template on mock data."""
+"""端到端回测：双均线模板 + mock 数据。"""
 
 from __future__ import annotations
 

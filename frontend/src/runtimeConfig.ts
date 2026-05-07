@@ -1,6 +1,7 @@
-// Single source of truth for frontend env-driven configuration.
-// Profile-aware, resolved once at module load. Business code must depend on
-// runtimeConfig, not on import.meta.env directly.
+/**
+ * 运行时配置唯一入口：由 Vite 环境变量派生，模块加载时解析一次。
+ * 业务代码应只依赖本对象，禁止直接读取 import.meta.env，便于联调与环境切换。
+ */
 
 export type Profile = "local" | "docker-dev" | "prod";
 

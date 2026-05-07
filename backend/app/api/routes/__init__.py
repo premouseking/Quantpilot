@@ -1,4 +1,4 @@
-"""Domain-scoped API routers."""
+"""按业务域划分的 API 路由聚合。"""
 
 from fastapi import APIRouter
 

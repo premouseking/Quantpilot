@@ -1,4 +1,4 @@
-"""Pytest configuration: isolate runtime config to a per-test directory."""
+"""Pytest 配置：每个用例隔离运行时目录与环境变量。"""
 
 from __future__ import annotations
 

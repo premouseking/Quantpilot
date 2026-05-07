@@ -1,7 +1,6 @@
-"""RuntimeConfig: single source of truth for environment-driven configuration.
+"""RuntimeConfig：由环境变量派生的运行时配置唯一入口。
 
-Profile-aware, eagerly resolved at process start. Business code must depend on
-this object, never read directly from os.environ.
+按 profile 在进程启动时一次性解析；业务代码须依赖本对象，禁止直接读 os.environ。
 """
 
 from __future__ import annotations
@@ -17,11 +16,10 @@ Profile = Literal["local", "docker-dev", "prod"]
 
 
 class RuntimeConfig(BaseSettings):
-    """Process-wide runtime configuration.
+    """进程级运行时配置。
 
-    All env vars are prefixed with ``QUANTPILOT_`` and resolved once at startup
-    via ``get_runtime_config()``. Business code should depend on this object,
-    not on environment variables directly.
+    环境变量统一带 ``QUANTPILOT_`` 前缀，经 ``get_runtime_config()`` 在启动时解析。
+    业务代码应依赖本对象而非裸读环境变量。
     """
 
     model_config = SettingsConfigDict(
@@ -42,6 +40,16 @@ class RuntimeConfig(BaseSettings):
     market_dir: Path = Field(default=Path("./data/market"))
     strategies_dir: Path = Field(default=Path("./data/strategies"))
 
+    market_csv_max_upload_bytes: int = Field(
+        default=15 * 1024 * 1024,
+        description="POST 上传单份行情 CSV 的最大字节数（写入 market_dir）",
+    )
+
+    akshare_adjust: str = Field(
+        default="qfq",
+        description='AkShare stock_zh_a_hist 复权方式：""（不复权）| "qfq"（前复权）| "hfq"（后复权）',
+    )
+
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://127.0.0.1:5173",
@@ -57,9 +65,9 @@ class RuntimeConfig(BaseSettings):
         return value
 
     def ensure_dirs(self) -> None:
-        """Create runtime directories if missing.
+        """若缺失则创建运行时目录。
 
-        Called once at startup to avoid first-request latency on a cold install.
+        启动时调用一次，避免冷安装后首个请求才建目录带来的延迟尖峰。
         """
         for path in (self.data_dir, self.runs_dir, self.market_dir, self.strategies_dir):
             path.mkdir(parents=True, exist_ok=True)
@@ -67,7 +75,7 @@ class RuntimeConfig(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_runtime_config() -> RuntimeConfig:
-    """Return the singleton RuntimeConfig instance."""
+    """返回进程内单例 ``RuntimeConfig``。"""
     config = RuntimeConfig()
     config.ensure_dirs()
     return config

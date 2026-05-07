@@ -1,1 +1,1 @@
-"""Core utilities: configuration, logging, error envelopes."""
+"""核心能力：配置、日志、统一错误信封。"""

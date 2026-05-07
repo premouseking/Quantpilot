@@ -1,4 +1,4 @@
-"""Engine events: orders, fills, and shared enums."""
+"""引擎事件模型：委托、成交及共用枚举。"""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class Order:
 
 @dataclass
 class Fill:
-    """Realized trade after slippage and commission."""
+    """已计入滑点与佣金后的成交明细。"""
 
     order_id: str
     timestamp: datetime

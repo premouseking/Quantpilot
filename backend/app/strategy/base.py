@@ -1,8 +1,8 @@
-"""Strategy base class and execution context.
+"""策略基类与每 Bar 执行上下文（StrategyContext）。
 
-The strategy interface is intentionally minimal. A strategy receives a
-``StrategyContext`` per bar and emits orders by calling ``ctx.order_target_percent``
-or ``ctx.submit_order``. The engine handles fills, costs, and bookkeeping.
+接口刻意保持精简：策略在每个 Bar 收到 ``StrategyContext``，
+通过 ``ctx.order_target_percent`` 或 ``ctx.submit_order`` 发单；
+引擎负责撮合、费用与账务。
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from app.engine.events import OrderSide, OrderType
 
 
 class OrderRouter(Protocol):
-    """Engine-side order entry point implemented by the broker/portfolio."""
+    """引擎侧下单入口协议，由经纪商/路由适配器实现。"""
 
     def submit_order(
         self,
@@ -44,7 +44,7 @@ class OrderRouter(Protocol):
 
 @dataclass
 class StrategyContext:
-    """Per-call context handed to the strategy on each bar."""
+    """策略在每个 Bar 上获得的调用上下文（行情、历史窗口、参数、路由）。"""
 
     timestamp: datetime
     symbol: str
@@ -79,22 +79,22 @@ class StrategyContext:
 
 
 class Strategy(ABC):
-    """Base class for user strategies.
+    """用户策略抽象基类。
 
-    Lifecycle:
-        - ``initialize(params)`` once before the first bar.
-        - ``on_bar(ctx)`` for each bar in chronological order.
-        - ``finalize()`` once after the last bar.
+    生命周期：
+        - ``initialize(params)``：首根 Bar 之前调用一次；
+        - ``on_bar(ctx)``：按时间顺序逐 Bar；
+        - ``finalize()``：最后一根 Bar 之后调用一次。
     """
 
     name: str = "strategy"
 
     def initialize(self, params: dict[str, Any]) -> None:
-        """Override to validate params or precompute state."""
+        """可覆盖：校验参数或预计算状态。"""
 
     @abstractmethod
     def on_bar(self, ctx: StrategyContext) -> None:
-        """Handle a single bar."""
+        """处理单根 K 线（Bar）。"""
 
     def finalize(self) -> None:
-        """Override to release resources or emit a summary."""
+        """可覆盖：释放资源或输出汇总信息。"""

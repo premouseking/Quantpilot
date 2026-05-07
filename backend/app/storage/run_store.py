@@ -1,8 +1,7 @@
-"""Persist and retrieve backtest reports as JSON files.
+"""回测报告 JSON 持久化与加载。
 
-Each run is stored as ``<runs_dir>/<run_id>.json``. This is intentionally
-simple for the MVP; SQLite/PostgreSQL will replace it once we need indexing,
-filtering by tags, or multi-user concurrency.
+每轮运行落盘为 ``<runs_dir>/<run_id>.json``。MVP 采用单文件方案；
+若需按标签检索、多用户并发，可升级为 SQLite/PostgreSQL。
 """
 
 from __future__ import annotations

@@ -40,8 +40,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes("@tanstack")) {
               return "vendor-query";
             }
-            // Keep react-router and its deps in the same chunk as react to avoid
-            // circular references.
+            // 将 react-router 及其依赖与 react 打入同包，避免分包后的循环引用
             if (
               id.includes("react-router") ||
               id.includes("@remix-run/router") ||
@@ -53,9 +52,8 @@ export default defineConfig(({ mode }) => {
             ) {
               return "vendor-react";
             }
-            // Group all of antd's dependency tree together (incl. rc-*, @rc-*,
-            // dom-align, dayjs, async-validator, etc.) so they don't end up in
-            // a generic vendor chunk that would import react and form cycles.
+            // 将 antd 整棵依赖树（含 rc-*、dayjs、async-validator 等）单独成包，
+            // 避免落入泛 vendor 后再反查 react 形成环依赖
             return "vendor-antd";
           },
         },

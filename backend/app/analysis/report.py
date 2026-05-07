@@ -1,4 +1,4 @@
-"""Report assembly: pack equity curve, trades, and metrics into JSON-friendly shapes."""
+"""报告组装：权益曲线、委托成交与指标表 → API 友好的 JSON 结构。"""
 
 from __future__ import annotations
 

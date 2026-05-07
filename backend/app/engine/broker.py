@@ -1,10 +1,6 @@
-"""Simulated broker.
+"""模拟经纪商：收单、套用成本模型、按规则成交并更新组合。
 
-Accepts orders, applies the cost model, fills market orders at the next bar's
-open or current bar's close (configurable), and updates the portfolio.
-
-For MVP simplicity, market orders fill immediately at the current bar's close
-with slippage applied. Limit orders are reserved for the next iteration.
+MVP：市价单在当前 K 线收盘价叠加滑点后立即成交；限价单下一版实现。
 """
 
 from __future__ import annotations
@@ -125,7 +121,7 @@ class SimulatedBroker:
         timestamp: datetime | None = None,
         reference_price: float | None = None,
     ) -> str | None:
-        """Adjust position so its market value equals ``target_percent`` of total equity."""
+        """将仓位市值调整至总权益的 ``target_percent`` 比例（相对目标名义资金）。"""
         if reference_price is None or reference_price <= 0:
             return None
 

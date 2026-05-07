@@ -1,4 +1,4 @@
-"""Strategy template registry."""
+"""策略模板注册表与工厂。"""
 
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ class StrategyTemplate:
 _TEMPLATES: dict[str, StrategyTemplate] = {
     "dual_ma": StrategyTemplate(
         id="dual_ma",
-        title="Dual Moving Average",
-        description="Long-only SMA crossover. Buy when short SMA crosses above long SMA.",
+        title="双均线交叉",
+        description="仅做多：短均线上穿长均线时建仓至目标仓位；下穿时清仓。",
         factory=DualMovingAverageStrategy,
         params_schema=DUAL_MA_SCHEMA,
     ),

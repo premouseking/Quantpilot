@@ -1,10 +1,9 @@
-"""DataProvider abstraction.
+"""DataProvider 抽象：引擎与 HTTP 层共用的行情契约。
 
-The unified interface exposed to the engine and API. Implementations include
-mock data, CSV files, and (later) Parquet/DuckDB-backed sources. The contract
-is intentionally narrow: given a symbol, frequency, and date range, return a
-sorted, non-duplicated DataFrame of OHLCV bars.
+需提供 symbol、频率与起止日后，返回按时间升序、无重复时间戳的 OHLCV DataFrame。
+实现包括 mock、CSV，后续可扩展 Parquet/DuckDB 等。
 """
+
 
 from __future__ import annotations
 
@@ -19,19 +18,19 @@ BAR_COLUMNS = ["timestamp", "open", "high", "low", "close", "volume"]
 
 
 class DataProvider(ABC):
-    """Abstract data provider.
+    """数据源抽象基类。
 
-    Implementations must:
-    - Return a DataFrame with columns = BAR_COLUMNS, sorted by timestamp ascending.
-    - Drop or raise on duplicate timestamps. The default policy is drop-and-warn.
-    - Raise ``DataMissingError`` if the requested symbol/range is unavailable.
+    约束：
+    - 输出 DataFrame 列顺序必须为 ``BAR_COLUMNS``，按 timestamp 升序。
+    - 重复时间戳：默认策略为丢弃并告警（实现类可选择在标准化阶段处理）。
+    - 无数据时抛出 ``DataMissingError``。
     """
 
     name: str = "abstract"
 
     @abstractmethod
     def list_symbols(self) -> list[str]:
-        """Return all symbols this provider can serve."""
+        """返回当前源可提供的全部标的代码。"""
 
     @abstractmethod
     def get_bars(
@@ -41,11 +40,11 @@ class DataProvider(ABC):
         start: datetime,
         end: datetime,
     ) -> pd.DataFrame:
-        """Return OHLCV bars for ``symbol`` within ``[start, end]`` inclusive."""
+        """返回 ``symbol`` 在 ``[start, end]``（闭区间）内的 OHLCV。"""
 
     @staticmethod
     def normalize(df: pd.DataFrame) -> pd.DataFrame:
-        """Normalize a raw DataFrame into BAR_COLUMNS order, sorted, deduped."""
+        """将原始 DataFrame 规范为 ``BAR_COLUMNS`` 列序，排序并去重 timestamp。"""
         missing = set(BAR_COLUMNS) - set(df.columns)
         if missing:
             raise ValueError(f"DataProvider output missing columns: {sorted(missing)}")

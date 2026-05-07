@@ -1,4 +1,4 @@
-"""Strategy template endpoints."""
+"""策略模板清单与详情。"""
 
 from __future__ import annotations
 

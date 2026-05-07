@@ -1,4 +1,4 @@
-"""Backtest service: orchestrates data, strategy, engine, and storage."""
+"""回测应用服务：编排数据源、策略模板、引擎与持久化。"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def _periods_per_year(frequency: Frequency) -> int:
 
 
 def run_backtest_request(payload: dict[str, Any]) -> dict[str, Any]:
-    """Execute a backtest from a request payload and persist the report."""
+    """根据 HTTP 载荷执行回测，生成报告并写入 RunStore，返回信封 JSON。"""
     try:
         symbol = payload["symbol"]
         start = datetime.fromisoformat(payload["start"])

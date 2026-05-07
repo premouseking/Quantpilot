@@ -1,4 +1,4 @@
-"""Performance metrics unit tests."""
+"""绩效指标单元测试。"""
 
 from __future__ import annotations
 

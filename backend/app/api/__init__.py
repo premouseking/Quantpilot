@@ -1,1 +1,1 @@
-"""API layer."""
+"""HTTP API 层。"""

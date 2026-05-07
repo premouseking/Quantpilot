@@ -1,8 +1,7 @@
-"""Common technical indicators.
+"""常用技术指标。
 
-All functions accept a 1D ``pd.Series`` of prices (typically close) and return
-a ``pd.Series`` of the same length. Leading NaN values are preserved so users
-can align with their input data.
+均接受一维 ``pd.Series``（通常为收盘价），返回等长 ``pd.Series``；
+前导 NaN 保留以便与输入对齐。
 """
 
 from __future__ import annotations
@@ -12,21 +11,21 @@ import pandas as pd
 
 
 def sma(close: pd.Series, window: int) -> pd.Series:
-    """Simple moving average."""
+    """简单移动平均（SMA）。"""
     if window <= 0:
         raise ValueError("window must be > 0")
     return close.rolling(window=window, min_periods=window).mean()
 
 
 def ema(close: pd.Series, window: int) -> pd.Series:
-    """Exponential moving average using the standard EMA recursion."""
+    """指数移动平均（标准 EMA 递推）。"""
     if window <= 0:
         raise ValueError("window must be > 0")
     return close.ewm(span=window, adjust=False).mean()
 
 
 def rsi(close: pd.Series, window: int = 14) -> pd.Series:
-    """Relative Strength Index (Wilder smoothing)."""
+    """相对强弱指标 RSI（Wilder 平滑）。"""
     if window <= 0:
         raise ValueError("window must be > 0")
     delta = close.diff()
@@ -45,7 +44,7 @@ def macd(
     slow: int = 26,
     signal: int = 9,
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """MACD line, signal line, and histogram."""
+    """MACD：快慢线差、信号线、柱（histogram）。"""
     if not (0 < fast < slow):
         raise ValueError("require 0 < fast < slow")
     macd_line = ema(close, fast) - ema(close, slow)

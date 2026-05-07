@@ -1,1 +1,1 @@
-"""Strategy framework: base class, templates, indicator library."""
+"""策略框架：基类、内置模板、指标库。"""

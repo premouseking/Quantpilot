@@ -1,1 +1,1 @@
-"""Strategy templates."""
+"""内置策略模板包。"""

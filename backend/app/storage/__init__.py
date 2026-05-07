@@ -1,1 +1,1 @@
-"""Lightweight file-backed storage for backtest reports."""
+"""轻量文件存储：回测报告 JSON（MVP）。"""

@@ -100,6 +100,16 @@ const BacktestPage: React.FC = () => {
     enabled: Boolean(provider),
   });
 
+  const symbols = symbolsQuery.data?.symbols ?? [];
+  useEffect(() => {
+    if (!symbols.length) return;
+    const current = form.getFieldValue("symbol") as string | undefined;
+    const sym = current ?? DEFAULTS.symbol;
+    if (!symbols.includes(sym)) {
+      form.setFieldsValue({ symbol: symbols[0] });
+    }
+  }, [provider, symbols, form]);
+
   // --- 侧栏预览：监听相关字段，随表单变更即时刷新 ---
   const watchedSymbol = Form.useWatch("symbol", form) ?? DEFAULTS.symbol;
   const watchedTemplate = Form.useWatch("templateId", form) ?? DEFAULTS.templateId;

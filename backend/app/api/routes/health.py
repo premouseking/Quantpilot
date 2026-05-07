@@ -1,4 +1,4 @@
-"""Health check and runtime info."""
+"""健康检查与运行时信息（profile、目录等）。"""
 
 from __future__ import annotations
 

@@ -1,7 +1,6 @@
-"""DataProvider registry.
+"""DataProvider 注册表：按名称解析已配置的数据源实例。
 
-Single place to look up a configured provider by name. Other modules should
-depend on this rather than instantiating providers directly.
+其他模块应通过本注册表获取 provider，避免在业务里直接 ``new`` 具体实现类。
 """
 
 from __future__ import annotations
@@ -9,6 +8,7 @@ from __future__ import annotations
 from app.core.config import get_runtime_config
 from app.core.errors import NotFoundError
 
+from .akshare_provider import AkShareDataProvider
 from .csv_provider import CsvDataProvider
 from .mock_provider import MockDataProvider
 from .provider import DataProvider
@@ -20,6 +20,7 @@ class DataProviderRegistry:
         self._providers: dict[str, DataProvider] = {
             "mock": MockDataProvider(),
             "csv": CsvDataProvider(base_dir=config.market_dir),
+            "akshare": AkShareDataProvider(adjust=config.akshare_adjust),
         }
 
     def get(self, name: str) -> DataProvider:

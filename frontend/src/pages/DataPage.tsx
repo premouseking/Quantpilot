@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Card,
   Select,
@@ -23,8 +23,9 @@ import {
 } from "@ant-design/icons";
 import { UploadOutlined } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../services/api";
+import { ApiError } from "../services/apiClient";
 import { PageHeader } from "../components/PageHeader";
 import { KLineChart } from "../components/KLineChart";
 import { QPColors } from "../theme";
@@ -42,6 +43,7 @@ const FREQUENCIES = [
 ];
 
 const DataPage: React.FC = () => {
+  const queryClient = useQueryClient();
   const { message } = AntdApp.useApp();
   const [provider, setProvider] = useState("mock");
   const [symbol, setSymbol] = useState("MOCK001");
@@ -61,6 +63,14 @@ const DataPage: React.FC = () => {
     queryFn: () => api.listSymbols(provider),
     enabled: Boolean(provider),
   });
+
+  const symbols = symbolsQuery.data?.symbols ?? [];
+  useEffect(() => {
+    if (!symbols.length) return;
+    if (!symbols.includes(symbol)) {
+      setSymbol(symbols[0]);
+    }
+  }, [provider, symbols, symbol]);
 
   const barsQuery = useQuery({
     queryKey: ["bars", provider, symbol, frequency, range[0]?.toISOString(), range[1]?.toISOString()],
@@ -106,16 +116,47 @@ const DataPage: React.FC = () => {
         title="数据接入"
         subtitle="登记数据源，预览行情质量，确认时间范围与字段完整性。"
         extra={
-          <Upload
-            accept=".csv"
-            showUploadList={false}
-            beforeUpload={() => {
-              message.info("CSV 上传接口将在 Phase 1.5 落地，目前可手动放置到 backend/data/market/<frequency>/<symbol>.csv");
-              return false;
-            }}
+          <Tooltip
+            title={`保存为 CSV 数据源下的 ${frequency}/${symbol}.csv（覆盖同名文件）。列须含 timestamp 或 date 与 OHLCV。`}
           >
-            <Button icon={<UploadOutlined />}>上传 CSV（占位）</Button>
-          </Upload>
+            <Upload
+              accept=".csv"
+              maxCount={1}
+              showUploadList={false}
+              disabled={!(symbol && frequency)}
+              customRequest={async (opts) => {
+                const raw = opts.file as File | Blob | string;
+                const file =
+                  raw instanceof Blob && !(raw instanceof File)
+                    ? new File([raw], "upload.csv", { type: "text/csv" })
+                    : (raw as File);
+                try {
+                  const res = await api.uploadMarketCsv({
+                    symbol,
+                    frequency,
+                    file,
+                  });
+                  message.success(
+                    `已写入 ${res.row_count} 行（${res.symbol} / ${res.frequency}）`,
+                  );
+                  await queryClient.invalidateQueries({ queryKey: ["symbols"] });
+                  await queryClient.invalidateQueries({ queryKey: ["bars"] });
+                  opts.onSuccess?.({}, {} as XMLHttpRequest);
+                } catch (e: unknown) {
+                  const txt =
+                    e instanceof ApiError
+                      ? e.envelope.message
+                      : e instanceof Error
+                        ? e.message
+                        : "上传失败";
+                  message.error(txt);
+                  opts.onError?.(new Error(txt));
+                }
+              }}
+            >
+              <Button icon={<UploadOutlined />}>上传 CSV</Button>
+            </Upload>
+          </Tooltip>
         }
       />
 

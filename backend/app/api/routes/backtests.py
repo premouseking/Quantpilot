@@ -1,4 +1,4 @@
-"""Backtest run endpoints."""
+"""回测运行：创建任务、列出历史、按 run_id 加载报告。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Logging setup."""
+"""标准库 logging 初始化（单行可读格式）。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ _INITIALIZED = False
 
 
 def configure_logging(level: str = "INFO") -> None:
-    """Configure stdlib logging once with a compact, readable format."""
+    """幂等配置根 logger：紧凑时间戳 + 级别 + 名称 + 消息。"""
     global _INITIALIZED
     if _INITIALIZED:
         return

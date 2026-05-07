@@ -17,6 +17,7 @@ dependencies = [
     "numpy>=1.26",
     "python-multipart>=0.0.9",
     "orjson>=3.9",
+    "akshare>=1.13",
 ]
 
 [project.optional-dependencies]

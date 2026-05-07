@@ -1,4 +1,4 @@
-"""Pydantic schemas for backtest API."""
+"""回测 HTTP 接口的 Pydantic 载荷定义。"""
 
 from __future__ import annotations
 

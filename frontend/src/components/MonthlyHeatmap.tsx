@@ -60,7 +60,7 @@ export const MonthlyHeatmap: React.FC<Props> = ({ equityCurve, height = 240 }) =
         orient: "horizontal",
         left: "center",
         bottom: 0,
-        // Vermilion → paper → moss green: feels like an aged research report.
+        // 色带：朱红 — 和纸 — 苔绿，贴近旧式研报热力图观感
         inRange: {
           color: ["#bd3f29", "#e8c8b8", "#fbf6e6", "#bcd0bc", "#3f6b48"],
         },

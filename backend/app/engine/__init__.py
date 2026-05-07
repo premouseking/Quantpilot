@@ -1,1 +1,1 @@
-"""Event-driven backtesting engine."""
+"""事件驱动回测引擎（Bar 级主循环）。"""
