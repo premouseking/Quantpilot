@@ -9,10 +9,30 @@ export interface StrategyTemplate {
   title: string;
   description: string;
   params_schema: Record<string, unknown>;
+  source: "builtin" | "user";
+  readonly: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  current_version?: string | null;
+  version_count?: number;
   code?: string;
 }
 
 export interface UserStrategyTemplate extends StrategyTemplate {
+  code: string;
+}
+
+export interface StrategyVersionSummary {
+  version_id: string;
+  strategy_id: string;
+  title: string;
+  description: string;
+  params_schema: Record<string, unknown>;
+  created_at: string;
+  note: string;
+}
+
+export interface StrategyVersionDetail extends StrategyVersionSummary {
   code: string;
 }
 
@@ -168,6 +188,7 @@ export interface SaveUserStrategyRequest {
   code: string;
   params_schema: Record<string, unknown>;
   overwrite?: boolean;
+  version_note?: string;
 }
 
 export const api = {
@@ -211,6 +232,11 @@ export const api = {
     apiClient.post<StrategyTemplate>("/api/strategies/user", payload),
   getUserStrategy: (id: string) =>
     apiClient.get<UserStrategyTemplate>(`/api/strategies/user/${id}`),
+  deleteUserStrategy: (id: string) => apiClient.delete<void>(`/api/strategies/user/${id}`),
+  listStrategyVersions: (id: string) =>
+    apiClient.get<{ versions: StrategyVersionSummary[] }>(`/api/strategies/user/${id}/versions`),
+  getStrategyVersion: (id: string, versionId: string) =>
+    apiClient.get<StrategyVersionDetail>(`/api/strategies/user/${id}/versions/${versionId}`),
   runBacktest: (payload: BacktestRunRequest) =>
     apiClient.post<BacktestRunEnvelope>("/api/backtests/runs", payload),
   listBacktestRuns: () =>

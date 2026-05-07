@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-
 import pytest
 
+from app.core.config import get_runtime_config
 from app.core.errors import InvalidParamsError
 from app.data.mock_provider import MockDataProvider
 from app.data.models import Frequency
@@ -145,3 +145,28 @@ def test_saved_user_strategy_is_listed_and_runs_end_to_end() -> None:
 
     assert result.final_value > 0
     assert len(result.orders) >= 1
+
+
+def test_save_user_strategy_does_not_execute_module_level_code() -> None:
+    marker_path = get_runtime_config().strategies_dir / "save_should_not_run.txt"
+    code = f"""
+from pathlib import Path
+from app.strategy.base import Strategy, StrategyContext
+
+Path(r"{marker_path.as_posix()}").write_text("executed", encoding="utf-8")
+
+
+class SaveOnlyStrategy(Strategy):
+    def on_bar(self, ctx: StrategyContext):
+        return None
+"""
+
+    save_user_strategy(
+        strategy_id="save_only_strategy",
+        title="仅保存校验",
+        description="保存时不应执行模块级代码",
+        code=code,
+        params_schema={"type": "object", "properties": {}, "required": []},
+    )
+
+    assert not marker_path.exists()

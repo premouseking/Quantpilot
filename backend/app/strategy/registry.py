@@ -27,6 +27,12 @@ class StrategyTemplate:
     description: str
     factory: Callable[[], Strategy]
     params_schema: dict[str, Any]
+    source: str
+    readonly: bool
+    created_at: str | None = None
+    updated_at: str | None = None
+    current_version: str | None = None
+    version_count: int = 0
 
 
 _TEMPLATES: dict[str, StrategyTemplate] = {}
@@ -45,6 +51,8 @@ _register(
         description="仅做多：短均线上穿长均线时建仓至目标仓位；下穿时清仓。",
         factory=DualMovingAverageStrategy,
         params_schema=DUAL_MA_SCHEMA,
+        source="builtin",
+        readonly=True,
     )
 )
 _register(
@@ -54,6 +62,8 @@ _register(
         description="仅做多：RSI 进入超卖区间时建仓；进入超买区间时清仓。",
         factory=RsiReversionStrategy,
         params_schema=RSI_SCHEMA,
+        source="builtin",
+        readonly=True,
     )
 )
 _register(
@@ -63,6 +73,8 @@ _register(
         description="仅做多：MACD 线上穿信号线时建仓；下穿时清仓。",
         factory=MacdCrossStrategy,
         params_schema=MACD_SCHEMA,
+        source="builtin",
+        readonly=True,
     )
 )
 
@@ -75,6 +87,12 @@ def list_templates() -> list[StrategyTemplate]:
             description=record.description,
             factory=lambda strategy_id=record.id: instantiate_user_strategy(strategy_id),
             params_schema=record.params_schema,
+            source=record.source,
+            readonly=record.readonly,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            current_version=record.current_version,
+            version_count=record.version_count,
         )
         for record in list_user_strategies()
     ]

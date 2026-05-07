@@ -112,4 +112,5 @@ export const apiClient = {
     apiFetch<T>(path, { method: "GET", query }),
   post: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "POST", body }),
+  delete: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
 };
