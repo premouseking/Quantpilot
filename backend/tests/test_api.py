@@ -34,6 +34,67 @@ def test_list_strategy_templates() -> None:
     assert resp.status_code == 200
     ids = [t["id"] for t in resp.json()["templates"]]
     assert "dual_ma" in ids
+    assert "rsi_reversion" in ids
+    assert "macd_cross" in ids
+
+
+def test_strategy_template_detail_returns_source_code() -> None:
+    client = _client()
+
+    dual_ma = client.get("/api/strategies/templates/dual_ma")
+    assert dual_ma.status_code == 200
+    assert "def on_bar" in dual_ma.json()["code"]
+    assert "DualMovingAverageStrategy" in dual_ma.json()["code"]
+
+    rsi = client.get("/api/strategies/templates/rsi_reversion")
+    assert rsi.status_code == 200
+    assert "RsiReversionStrategy" in rsi.json()["code"]
+
+    macd = client.get("/api/strategies/templates/macd_cross")
+    assert macd.status_code == 200
+    assert "MacdCrossStrategy" in macd.json()["code"]
+
+
+def test_save_user_strategy_template() -> None:
+    client = _client()
+    payload = {
+        "id": "api_hold_strategy",
+        "title": "API 持有策略",
+        "description": "预热后买入",
+        "code": (
+            "from app.strategy.base import Strategy, StrategyContext\n\n"
+            "class ApiHoldStrategy(Strategy):\n"
+            "    def initialize(self, params):\n"
+            "        self.done = False\n"
+            "    def on_bar(self, ctx: StrategyContext):\n"
+            "        if not self.done:\n"
+            "            ctx.order_target_percent(float(ctx.params.get('target_percent', 0.5)))\n"
+            "            self.done = True\n"
+        ),
+        "params_schema": {
+            "type": "object",
+            "title": "API 持有策略",
+            "properties": {
+                "target_percent": {
+                    "type": "number",
+                    "title": "目标仓位",
+                    "minimum": 0.01,
+                    "maximum": 1,
+                    "default": 0.5,
+                }
+            },
+            "required": ["target_percent"],
+        },
+    }
+
+    resp = client.post("/api/strategies/user", json=payload)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == "api_hold_strategy"
+
+    templates = client.get("/api/strategies/templates")
+    assert templates.status_code == 200
+    ids = [t["id"] for t in templates.json()["templates"]]
+    assert "api_hold_strategy" in ids
 
 
 def test_run_and_fetch_backtest() -> None:
