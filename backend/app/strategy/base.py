@@ -91,7 +91,6 @@ class Strategy(ABC):
 
     def initialize(self, params: dict[str, Any]) -> None:
         """Override to validate params or precompute state."""
-        return None
 
     @abstractmethod
     def on_bar(self, ctx: StrategyContext) -> None:
@@ -99,4 +98,3 @@ class Strategy(ABC):
 
     def finalize(self) -> None:
         """Override to release resources or emit a summary."""
-        return None

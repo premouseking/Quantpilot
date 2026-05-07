@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from app.analysis.metrics import _equity_series, compute_metrics, max_drawdown
+from app.analysis.metrics import compute_metrics, max_drawdown, _equity_series
 from app.engine.events import Fill, OrderSide
 from app.engine.portfolio import EquityPoint
 
