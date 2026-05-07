@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from hashlib import blake2b
 
 import numpy as np
 import pandas as pd
@@ -15,13 +16,13 @@ from app.core.errors import DataMissingError, InvalidParamsError
 from .models import Frequency
 from .provider import DataProvider
 
-
 _DEFAULT_SYMBOLS = ("MOCK001", "MOCK002", "MOCK003")
 
 
 def _seed_for(symbol: str) -> int:
-    """按标的派生稳定随机种子，保证同 symbol 多次运行结果一致。"""
-    return abs(hash(symbol)) % (2**31 - 1)
+    """按标的派生稳定随机种子，保证同 symbol 多次运行结果一致（跨进程一致）。"""
+    digest = blake2b(symbol.encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, "big") % (2**31 - 1)
 
 
 def _step_for(frequency: Frequency) -> timedelta:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
 
@@ -61,11 +61,11 @@ async def upload_market_csv(
 @router.get("/providers/{provider}/bars")
 def get_bars(
     provider: str,
-    symbol: str = Query(...),
-    start: datetime = Query(...),
-    end: datetime = Query(...),
-    frequency: Frequency = Query(Frequency.DAILY),
-    limit: int = Query(500, ge=1, le=5000),
+    symbol: Annotated[str, Query()],
+    start: Annotated[datetime, Query()],
+    end: Annotated[datetime, Query()],
+    frequency: Annotated[Frequency, Query()] = Frequency.DAILY,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 500,
 ) -> dict[str, Any]:
     registry = get_data_provider_registry()
     data_provider = registry.get(provider)

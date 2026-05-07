@@ -91,6 +91,7 @@ class Strategy(ABC):
 
     def initialize(self, params: dict[str, Any]) -> None:
         """可覆盖：校验参数或预计算状态。"""
+        return None
 
     @abstractmethod
     def on_bar(self, ctx: StrategyContext) -> None:
@@ -98,3 +99,4 @@ class Strategy(ABC):
 
     def finalize(self) -> None:
         """可覆盖：释放资源或输出汇总信息。"""
+        return None

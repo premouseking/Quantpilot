@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.data.models import Frequency
 from app.data.mock_provider import MockDataProvider
+from app.data.models import Frequency
 from app.engine.backtest import BacktestConfig, run_backtest
 from app.strategy.registry import create_strategy
 
@@ -26,10 +26,6 @@ def test_dual_ma_runs_end_to_end_on_mock_data() -> None:
     assert len(result.equity_curve) > 0
     assert result.final_value > 0
     assert result.equity_curve[0].total_value == config.initial_cash
-
-    expected_total = result.final_cash + result.final_position * result.equity_curve[-1].cash * 0
-    expected_total = result.final_cash + result.final_position * (
-        result.fills[-1].price if result.fills else 0
-    )
+    assert result.final_value == result.equity_curve[-1].total_value
     assert result.final_value > 0
     assert all(point.total_value > 0 for point in result.equity_curve)
