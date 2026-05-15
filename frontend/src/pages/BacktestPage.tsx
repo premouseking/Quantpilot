@@ -4,7 +4,7 @@
  * 职责：采集策略模板、数据源、标的、时间区间与交易成本，组装 {@link BacktestRunRequest} 调用后端；
  * 成功后跳转至单次运行报告页。
  */
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   Card,
   Form,
@@ -120,6 +120,8 @@ const BacktestPage: React.FC = () => {
   const [form] = Form.useForm<FormValues>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const initializedTemplateIdRef = useRef<string | null>(null);
+  const strategyVersionRef = useRef<string | null>(null);
 
   // --- 服务端枚举：数据源、策略模板 ---
   const providersQuery = useQuery({ queryKey: ["providers"], queryFn: api.listProviders });
@@ -164,16 +166,20 @@ const BacktestPage: React.FC = () => {
   const selectedProperties = selectedSchema.properties ?? {};
   const requiredParams = new Set(selectedSchema.required ?? []);
 
-  // --- 深链：URL ?template= 预填策略模板 ---
+  // --- 深链：URL ?template= 预填策略模板，&version= 标记策略版本 ---
   useEffect(() => {
     const tplId = searchParams.get("template");
     if (tplId) {
       form.setFieldsValue({ templateId: tplId });
     }
+    strategyVersionRef.current = searchParams.get("version");
   }, [searchParams, form]);
 
   useEffect(() => {
     if (!selectedTemplate) return;
+    if (initializedTemplateIdRef.current === selectedTemplate.id) return;
+
+    initializedTemplateIdRef.current = selectedTemplate.id;
     form.setFieldsValue({
       strategyParams: buildDefaultStrategyParams(selectedTemplate),
     });
@@ -204,6 +210,7 @@ const BacktestPage: React.FC = () => {
       initial_cash: values.initialCash,
       data_provider: values.provider,
       strategy_params: values.strategyParams,
+      strategy_version: strategyVersionRef.current,
       cost_model: {
         commission_rate: values.commissionRate,
         min_commission: 5,

@@ -28,4 +28,5 @@ class BacktestRunRequest(BaseModel):
     benchmark_symbol: str | None = None
     benchmark_provider: str | None = None
     strategy_params: dict[str, Any] = Field(default_factory=dict)
+    strategy_version: str | None = None
     cost_model: CostModelPayload = Field(default_factory=CostModelPayload)

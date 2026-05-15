@@ -41,6 +41,7 @@ class BacktestConfig:
     lot_size: int = 100
     data_provider: str = "mock"
     template_id: str | None = None
+    strategy_version: str | None = None
 
 
 @dataclass

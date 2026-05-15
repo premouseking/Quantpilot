@@ -5,19 +5,38 @@ from __future__ import annotations
 import importlib
 import inspect
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.errors import NotFoundError
 
 from .base import Strategy
+from .templates.bollinger import PARAMS_SCHEMA as BOLLINGER_SCHEMA
+from .templates.bollinger import BollingerBreakoutStrategy
 from .templates.dual_ma import PARAMS_SCHEMA as DUAL_MA_SCHEMA
 from .templates.dual_ma import DualMovingAverageStrategy
 from .templates.macd import PARAMS_SCHEMA as MACD_SCHEMA
 from .templates.macd import MacdCrossStrategy
 from .templates.rsi import PARAMS_SCHEMA as RSI_SCHEMA
 from .templates.rsi import RsiReversionStrategy
-from .user_store import get_user_strategy, instantiate_user_strategy, list_user_strategies
+from .templates.turtle import PARAMS_SCHEMA as TURTLE_SCHEMA
+from .templates.turtle import TurtleTradingStrategy
+from .user_store import (
+    add_comment,
+    delete_comment,
+    export_strategy,
+    fork_strategy,
+    get_user_strategy,
+    import_strategy,
+    instantiate_user_strategy,
+    list_all_tags,
+    list_category_options,
+    list_comments,
+    list_public_strategies,
+    list_user_strategies,
+    set_visibility,
+    update_strategy_tags,
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +46,17 @@ class StrategyTemplate:
     description: str
     factory: Callable[[], Strategy]
     params_schema: dict[str, Any]
+    source: str
+    readonly: bool
+    visibility: str = "private"
+    tags: list[str] = field(default_factory=list)
+    category: str = "custom"
+    forked_from: str | None = None
+    forked_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    current_version: str | None = None
+    version_count: int = 0
 
 
 _TEMPLATES: dict[str, StrategyTemplate] = {}
@@ -45,6 +75,8 @@ _register(
         description="仅做多：短均线上穿长均线时建仓至目标仓位；下穿时清仓。",
         factory=DualMovingAverageStrategy,
         params_schema=DUAL_MA_SCHEMA,
+        source="builtin",
+        readonly=True,
     )
 )
 _register(
@@ -54,6 +86,8 @@ _register(
         description="仅做多：RSI 进入超卖区间时建仓；进入超买区间时清仓。",
         factory=RsiReversionStrategy,
         params_schema=RSI_SCHEMA,
+        source="builtin",
+        readonly=True,
     )
 )
 _register(
@@ -63,6 +97,30 @@ _register(
         description="仅做多：MACD 线上穿信号线时建仓；下穿时清仓。",
         factory=MacdCrossStrategy,
         params_schema=MACD_SCHEMA,
+        source="builtin",
+        readonly=True,
+    )
+)
+_register(
+    StrategyTemplate(
+        id="bollinger_breakout",
+        title="布林带突破",
+        description="仅做多：价格触及下轨时建仓，跌破中轨时清仓。",
+        factory=BollingerBreakoutStrategy,
+        params_schema=BOLLINGER_SCHEMA,
+        source="builtin",
+        readonly=True,
+    )
+)
+_register(
+    StrategyTemplate(
+        id="turtle_trading",
+        title="海龟交易",
+        description="仅做多：Donchian 通道突破入场，低点出场。",
+        factory=TurtleTradingStrategy,
+        params_schema=TURTLE_SCHEMA,
+        source="builtin",
+        readonly=True,
     )
 )
 
@@ -75,6 +133,17 @@ def list_templates() -> list[StrategyTemplate]:
             description=record.description,
             factory=lambda strategy_id=record.id: instantiate_user_strategy(strategy_id),
             params_schema=record.params_schema,
+            source=record.source,
+            readonly=record.readonly,
+            visibility=record.visibility,
+            tags=list(record.tags),
+            category=record.category,
+            forked_from=record.forked_from,
+            forked_at=record.forked_at,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+            current_version=record.current_version,
+            version_count=record.version_count,
         )
         for record in list_user_strategies()
     ]

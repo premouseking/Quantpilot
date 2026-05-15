@@ -1,0 +1,83 @@
+{
+  "id": "dual_ma_custom",
+  "title": "双均线交叉 副本",
+  "description": "仅做多：短均线上穿长均线时建仓至目标仓位；下穿时清仓。",
+  "params_schema": {
+    "type": "object",
+    "title": "双均线",
+    "properties": {
+      "short_window": {
+        "type": "integer",
+        "title": "短周期窗口",
+        "minimum": 1,
+        "default": 5
+      },
+      "long_window": {
+        "type": "integer",
+        "title": "长周期窗口",
+        "minimum": 2,
+        "default": 20
+      },
+      "target_percent": {
+        "type": "number",
+        "title": "目标仓位（占权益）",
+        "minimum": 0.01,
+        "maximum": 1.0,
+        "default": 0.95
+      }
+    },
+    "required": [
+      "short_window",
+      "long_window",
+      "target_percent"
+    ]
+  },
+  "source": "user",
+  "readonly": false,
+  "visibility": "public",
+  "created_at": "2026-05-15T07:25:40.913556+00:00",
+  "updated_at": "2026-05-15T07:25:40.913556+00:00",
+  "current_version": "v1",
+  "version_note": "",
+  "versions": [
+    {
+      "version_id": "v1",
+      "title": "双均线交叉 副本",
+      "description": "仅做多：短均线上穿长均线时建仓至目标仓位；下穿时清仓。",
+      "params_schema": {
+        "type": "object",
+        "title": "双均线",
+        "properties": {
+          "short_window": {
+            "type": "integer",
+            "title": "短周期窗口",
+            "minimum": 1,
+            "default": 5
+          },
+          "long_window": {
+            "type": "integer",
+            "title": "长周期窗口",
+            "minimum": 2,
+            "default": 20
+          },
+          "target_percent": {
+            "type": "number",
+            "title": "目标仓位（占权益）",
+            "minimum": 0.01,
+            "maximum": 1.0,
+            "default": 0.95
+          }
+        },
+        "required": [
+          "short_window",
+          "long_window",
+          "target_percent"
+        ]
+      },
+      "code_file": "dual_ma_custom.v1.py",
+      "created_at": "2026-05-15T07:25:40.913556+00:00",
+      "note": ""
+    }
+  ],
+  "code_file": "dual_ma_custom.py"
+}

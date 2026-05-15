@@ -1,0 +1,55 @@
+{
+  "id": "smoke_imported",
+  "title": "导入的冒烟策略",
+  "description": "测试",
+  "params_schema": {
+    "type": "object",
+    "title": "冒烟测试",
+    "properties": {
+      "pct": {
+        "type": "number",
+        "title": "仓位",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.5
+      }
+    },
+    "required": [
+      "pct"
+    ]
+  },
+  "source": "user",
+  "readonly": false,
+  "visibility": "public",
+  "created_at": "2026-05-15T07:22:54.149762+00:00",
+  "updated_at": "2026-05-15T07:22:54.150297+00:00",
+  "current_version": "v1",
+  "version_note": "已从文件导入（1 个版本）",
+  "versions": [
+    {
+      "version_id": "v1",
+      "title": "冒烟测试",
+      "description": "测试",
+      "params_schema": {
+        "type": "object",
+        "title": "冒烟测试",
+        "properties": {
+          "pct": {
+            "type": "number",
+            "title": "仓位",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5
+          }
+        },
+        "required": [
+          "pct"
+        ]
+      },
+      "code_file": "smoke_imported.v1.py",
+      "created_at": "2026-05-15T07:22:54.149762+00:00",
+      "note": ""
+    }
+  ],
+  "code_file": "smoke_imported.py"
+}

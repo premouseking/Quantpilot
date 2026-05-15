@@ -58,6 +58,8 @@ def run_backtest_request(payload: dict[str, Any]) -> dict[str, Any]:
         slippage_bps=float(cost_payload.get("slippage_bps", 5.0)),
     )
 
+    strategy_version = payload.get("strategy_version")
+
     config = BacktestConfig(
         symbol=symbol,
         start=start,
@@ -69,6 +71,7 @@ def run_backtest_request(payload: dict[str, Any]) -> dict[str, Any]:
         benchmark_symbol=benchmark_symbol,
         data_provider=provider_name,
         template_id=template_id,
+        strategy_version=strategy_version,
     )
 
     registry = get_data_provider_registry()

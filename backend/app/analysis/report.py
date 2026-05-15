@@ -79,6 +79,7 @@ def build_report(
             "benchmark_symbol": result.config.benchmark_symbol,
             "data_provider": result.config.data_provider,
             "template_id": result.config.template_id,
+            "strategy_version": result.config.strategy_version,
             "strategy_params": result.config.strategy_params,
             "cost_model": {
                 "commission_rate": result.config.cost_model.commission_rate,
