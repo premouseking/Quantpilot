@@ -11,6 +11,7 @@ const BacktestRunsPage = lazy(() => import("./pages/BacktestRunsPage"));
 const BacktestReportPage = lazy(() => import("./pages/BacktestReportPage"));
 const OptimizationPage = lazy(() => import("./pages/OptimizationPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const MarketplacePage = lazy(() => import("./pages/MarketplacePage"));
 
 const PageFallback: React.FC = () => (
   <div style={{ padding: 64, textAlign: "center" }}>
@@ -31,6 +32,7 @@ export const App: React.FC = () => {
           <Route path="runs/:runId" element={<BacktestReportPage />} />
           <Route path="optimization" element={<OptimizationPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="marketplace" element={<MarketplacePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

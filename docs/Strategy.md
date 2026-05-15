@@ -250,7 +250,11 @@ pytest
 ruff check .
 ```
 
-## 7. 后续扩展约定
+## 7. 策略管理与分享
+
+策略管理功能（导入导出、可见性、版本对比、策略市场）已实现，详见 [StrategyManagement.md](./StrategyManagement.md)。
+
+## 8. 后续扩展约定
 
 新增策略模板时遵循同一流程：
 
@@ -261,3 +265,214 @@ ruff check .
 5. 定义 `PARAMS_SCHEMA`，保证前端可以渲染参数表单。
 6. 在 `registry.py` 注册 `StrategyTemplate`。
 7. 增加注册表测试、非法参数测试和回测冒烟测试。
+
+
+## 9. Phase 1 — 参数优化引擎
+
+补齐 README 中"参数优化范围定义与参数敏感性分析"目标功能，将前端模拟数据替换为真实后端计算。
+
+### 9.1 网格搜索
+
+**新增文件**：`backend/app/optimization/grid_search.py`
+
+对策略参数的笛卡尔积组合逐一遍历，每个组合执行一次完整回测，收集 10 项绩效指标，按指定排序键返回结果矩阵。
+
+核心接口：
+
+```python
+@dataclass
+class GridSearchConfig:
+    template_id: str
+    symbol: str
+    start: datetime
+    end: datetime
+    param_grid: dict[str, list[float | int]]  # 参数轴
+    sort_by: str = "sharpe_ratio"             # cumulative_return, max_drawdown 等
+
+def run_grid_search(config: GridSearchConfig) -> list[GridResultItem]
+```
+
+API 端点：
+
+```
+POST /api/optimization/grid-search
+```
+
+返回 `total_combinations`、`sort_by` 和 `results` 数组（每项含 params + 10 个绩效指标）。
+
+### 9.2 敏感性分析
+
+**新增文件**：`backend/app/optimization/sensitivity.py`
+
+对每个参数，固定其他参数为基准值，沿该参数轴向采样（默认 10 个采样点），量化每个参数对夏普比率的影响程度（impact_score = 夏普最大差值）。
+
+```python
+@dataclass
+class SensitivityResult:
+    param_name: str
+    title: str
+    points: list[SensitivityPoint]
+    impact_score: float  # 越大越敏感
+```
+
+API 端点：
+
+```
+POST /api/optimization/sensitivity
+```
+
+返回按 `impact_score` 降序排列的参数敏感度列表，每个含采样点数组。
+
+### 9.3 前端改造
+
+**重写** [OptimizationPage.tsx](Quantpilot/frontend/src/pages/OptimizationPage.tsx)：移除 `generateMockGrid` 模拟数据，接入真实 API。
+
+- **网格搜索标签页**：参数范围编辑器（起始/结束/步长）→ 调用 `runGridSearch` → 统计卡片 + Sharpe 热力图 + Top 10 排名表
+- **敏感性分析标签页**：基准参数 + 采样范围编辑器 → 调用 `runSensitivity` → 影响度排序 + 参数敏感度折线图 + 各参数采样点明细表
+
+**新增文件**：`backend/app/schemas/optimization.py` — Pydantic 请求/响应模型。
+
+### 9.4 测试
+
+`backend/tests/test_optimization.py`（7 个用例）：网格搜索结果数量、排序、单轴参数、敏感度基本流程、分值排序等。
+
+
+## 10. Phase 2 — 扩展指标库与策略模板
+
+### 10.1 新增指标
+
+**修改文件**：[indicators.py](Quantpilot/backend/app/strategy/indicators.py)
+
+新增 5 个指标函数：
+
+| 函数 | 签名 | 说明 |
+|---|---|---|
+| `bollinger_bands` | `(close, window=20, num_std=2.0)` | 布林带：上轨、中轨、下轨 |
+| `atr` | `(high, low, close, window=14)` | 平均真实波幅 |
+| `kdj` | `(high, low, close, n=9, k_window=3, d_window=3)` | KDJ 随机指标：%K、%D、%J 线 |
+| `obv` | `(close, volume)` | 能量潮 |
+| `williams_r` | `(high, low, close, window=14)` | 威廉指标 |
+
+### 10.2 新增策略模板
+
+| 模板 ID | 标题 | 文件 | 说明 |
+|---|---|---|---|
+| `bollinger_breakout` | 布林带突破 | [templates/bollinger.py](Quantpilot/backend/app/strategy/templates/bollinger.py) | 价格触及下轨建仓，跌破中轨清仓 |
+| `turtle_trading` | 海龟交易 | [templates/turtle.py](Quantpilot/backend/app/strategy/templates/turtle.py) | Donchian 通道突破入场，低点出场 |
+
+每个模板遵循统一规范：`Strategy` 子类、`PARAMS_SCHEMA`、`initialize` 参数校验。
+
+### 10.3 注册与保护
+
+- [registry.py](Quantpilot/backend/app/strategy/registry.py) 注册 5 个内置模板（+2 新增）
+- [user_store.py](Quantpilot/backend/app/strategy/user_store.py) `_BUILTIN_IDS` 更新为 5 个保护 ID
+
+### 10.4 前端指标目录更新
+
+[StrategiesPage.tsx](Quantpilot/frontend/src/pages/StrategiesPage.tsx) 内置指标库卡片从 4 个扩展至 9 个，分类增加"波动"和"量价"。
+
+### 10.5 测试
+
+`backend/tests/test_indicators.py` 从 4 个用例扩展至 9 个（新增布林带、ATR、KDJ、OBV、威廉指标测试）。
+
+
+## 11. Phase 3 — 代码片段与快速验证
+
+### 11.1 快速验证 API
+
+```
+POST /api/strategies/validate
+```
+
+请求体：
+
+```json
+{
+  "code": "from app.strategy.base import ..."
+}
+```
+
+执行三步验证：
+1. **语法检查**：`ast.parse` 编译 Python 代码
+2. **结构检查**：确认有 `Strategy` 子类且实现了 `on_bar` 方法
+3. **运行时验证**：用 Mock 数据执行 1 个月迷你回测
+
+返回：
+
+```json
+{
+  "valid": true/false,
+  "errors": [{"type": "syntax|structure|runtime", "message": "..."}],
+  "warnings": [{"type": "inactive", "message": "策略未产生任何订单"}],
+  "stats": {"bars_processed": 22, "orders_generated": 2, "final_value": 998000, "trades": 1}
+}
+```
+
+### 11.2 代码片段
+
+前端编辑器上方新增片段工具栏，提供 4 个可插入模板：
+
+| 片段 | 说明 |
+|---|---|
+| 新策略 | 完整 Strategy 子类模板（initialize / on_bar / finalize） |
+| SMA 交叉 | 双均线交叉清仓/建仓模式 |
+| RSI 反转 | RSI 超买超卖反转逻辑 |
+| PARAMS_SCHEMA | 参数定义 JSON Schema 模板 |
+
+点击片段按钮即替换编辑器内容为对应代码模板。
+
+### 11.3 前端集成
+
+- [StrategiesPage.tsx](Quantpilot/frontend/src/pages/StrategiesPage.tsx) 代码标签页编辑器上方新增"快速验证"按钮和 4 个片段按钮
+- [api.ts](Quantpilot/frontend/src/services/api.ts) 新增 `validateCode` API 方法
+
+
+## 12. 验证记录（最终）
+
+```bash
+# 后端测试
+cd backend
+pytest tests/ -v --ignore=tests/test_data_provider.py
+# 结果：78 passed
+
+# 前端类型检查
+cd frontend
+npm run typecheck
+# 结果：通过，无类型错误
+
+# 策略模板
+curl http://127.0.0.1:8000/api/strategies/templates
+# 返回 5 个内置模板：dual_ma, rsi_reversion, macd_cross,
+#                    bollinger_breakout, turtle_trading
+
+# 指标库
+# 可用指标：SMA, EMA, RSI, MACD, Bollinger Bands, ATR, KDJ, OBV, Williams %R
+# 共 9 个指标函数
+```
+
+## 13. 文件结构（最终）
+
+```text
+backend/app/
+  strategy/
+    base.py                     Strategy 基类、StrategyContext、OrderRouter
+    indicators.py               SMA / EMA / RSI / MACD / Bollinger / ATR / KDJ / OBV / Williams %R
+    registry.py                 策略模板注册表与工厂（5 内置 + 用户策略）
+    templates/
+      __init__.py
+      dual_ma.py               双均线交叉
+      rsi.py                   RSI 阈值反转
+      macd.py                  MACD 金叉/死叉
+      bollinger.py             布林带突破           ★ Phase 2
+      turtle.py                海龟交易             ★ Phase 2
+    user_store.py              用户策略 CRUD、版本管理、导入导出、标签、Fork、评论
+  optimization/
+    __init__.py
+    grid_search.py             网格搜索引擎          ★ Phase 1
+    sensitivity.py             参数敏感性分析        ★ Phase 1
+  api/routes/
+    strategies.py              策略模板 + 验证 + 导入导出 + 标签 + Fork + 评论
+    optimization.py            网格搜索 + 敏感性分析  ★ Phase 1
+  schemas/
+    optimization.py           优化请求/响应模型      ★ Phase 1
+```

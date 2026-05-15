@@ -5,11 +5,12 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   ExperimentOutlined,
-  ThunderboltOutlined,
-  HistoryOutlined,
-  AppstoreOutlined,
-  SettingOutlined,
   GithubOutlined,
+  GlobalOutlined,
+  HistoryOutlined,
+  SettingOutlined,
+  ShopOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import { runtimeConfig } from "../runtimeConfig";
 
@@ -19,9 +20,10 @@ const NAV_ITEMS = [
   { key: "/", icon: <DashboardOutlined />, label: "概览" },
   { key: "/data", icon: <DatabaseOutlined />, label: "数据接入" },
   { key: "/strategies", icon: <ExperimentOutlined />, label: "策略" },
+  { key: "/marketplace", icon: <ShopOutlined />, label: "策略市场" },
   { key: "/backtest", icon: <ThunderboltOutlined />, label: "回测" },
   { key: "/runs", icon: <HistoryOutlined />, label: "回测记录" },
-  { key: "/optimization", icon: <AppstoreOutlined />, label: "参数优化" },
+  { key: "/optimization", icon: <GlobalOutlined />, label: "参数优化" },
   { key: "/settings", icon: <SettingOutlined />, label: "设置" },
 ];
 
@@ -40,6 +42,7 @@ export const AppLayout: React.FC = () => {
     if (location.pathname.startsWith("/runs")) return "/runs";
     if (location.pathname.startsWith("/backtest")) return "/backtest";
     if (location.pathname.startsWith("/strategies")) return "/strategies";
+    if (location.pathname.startsWith("/marketplace")) return "/marketplace";
     if (location.pathname.startsWith("/data")) return "/data";
     if (location.pathname.startsWith("/optimization")) return "/optimization";
     if (location.pathname.startsWith("/settings")) return "/settings";

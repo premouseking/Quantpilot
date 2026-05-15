@@ -11,6 +11,11 @@ export interface StrategyTemplate {
   params_schema: Record<string, unknown>;
   source: "builtin" | "user";
   readonly: boolean;
+  visibility?: string;
+  tags?: string[];
+  category?: string;
+  forked_from?: string | null;
+  forked_at?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   current_version?: string | null;
@@ -173,12 +178,157 @@ export interface BacktestRunRequest {
   benchmark_symbol?: string | null;
   benchmark_provider?: string | null;
   strategy_params: Record<string, unknown>;
+  strategy_version?: string | null;
   cost_model: {
     commission_rate: number;
     min_commission: number;
     stamp_tax_rate: number;
     slippage_bps: number;
   };
+}
+
+export interface BacktestReportConfig {
+  symbol: string;
+  frequency: string;
+  start: string;
+  end: string;
+  initial_cash: number;
+  benchmark_symbol: string | null;
+  data_provider?: string;
+  template_id?: string | null;
+  strategy_version?: string | null;
+  strategy_params: Record<string, unknown>;
+  cost_model: Record<string, number>;
+}
+
+export interface StrategyExportPayload {
+  format_version: string;
+  exported_at: string;
+  strategy: {
+    id: string;
+    title: string;
+    description: string;
+    params_schema: Record<string, unknown>;
+    visibility: string;
+    created_at?: string | null;
+    updated_at?: string | null;
+    current_version?: string | null;
+    versions: StrategyVersionDetail[];
+  };
+}
+
+export interface VersionComparisonItem {
+  version_id: string;
+  run_count: number;
+  best_run_id: string;
+  best_created_at: string;
+  cumulative_return: number | null;
+  annualized_return: number | null;
+  sharpe_ratio: number | null;
+  max_drawdown: number | null;
+  win_rate: number | null;
+  trade_count: number | null;
+}
+
+export interface VersionComparison {
+  strategy_id: string;
+  comparisons: VersionComparisonItem[];
+  message?: string;
+}
+
+export interface VisibilityOptions {
+  values: string[];
+  descriptions: Record<string, string>;
+}
+
+export interface MarketplaceStrategy extends StrategyTemplate {
+  code: string;
+}
+
+export interface StrategyComment {
+  id: string;
+  strategy_id: string;
+  author: string;
+  content: string;
+  created_at: string;
+}
+
+export interface CategoryOption {
+  value: string;
+  label: string;
+}
+
+export interface GridSearchRequest {
+  template_id: string;
+  symbol: string;
+  start: string;
+  end: string;
+  frequency?: string;
+  initial_cash?: number;
+  data_provider?: string;
+  param_grid: Record<string, number[]>;
+  sort_by?: string;
+}
+
+export interface GridResultItem {
+  params: Record<string, number>;
+  cumulative_return: number;
+  annualized_return: number;
+  sharpe_ratio: number;
+  max_drawdown: number;
+  win_rate: number;
+  trade_count: number;
+  final_value: number;
+  sortino_ratio: number;
+  calmar_ratio: number;
+}
+
+export interface GridSearchResponse {
+  template_id: string;
+  symbol: string;
+  total_combinations: number;
+  valid_count: number;
+  skipped_count: number;
+  sort_by: string;
+  results: GridResultItem[];
+  skipped: Array<{ params: Record<string, number>; reason: string }>;
+}
+
+export interface SensitivityRequest {
+  template_id: string;
+  symbol: string;
+  start: string;
+  end: string;
+  frequency?: string;
+  initial_cash?: number;
+  data_provider?: string;
+  base_params: Record<string, number>;
+  param_ranges: Record<string, { start: number; end: number; samples: number }>;
+  samples_per_param?: number;
+}
+
+export interface SensitivityPoint {
+  value: number;
+  cumulative_return: number;
+  sharpe_ratio: number;
+  max_drawdown: number;
+}
+
+export interface SensitivityResultItem {
+  param_name: string;
+  title: string;
+  impact_score: number;
+  points: SensitivityPoint[];
+}
+
+export interface SensitivityResponse {
+  template_id: string;
+  symbol: string;
+  total_points: number;
+  valid_points: number;
+  skipped_count: number;
+  results: SensitivityResultItem[];
+  skipped: Array<{ param_name: string; value: number; reason: string }>;
 }
 
 export interface SaveUserStrategyRequest {
@@ -189,6 +339,10 @@ export interface SaveUserStrategyRequest {
   params_schema: Record<string, unknown>;
   overwrite?: boolean;
   version_note?: string;
+  visibility?: string;
+  tags?: string[];
+  category?: string;
+  forked_from?: string | null;
 }
 
 export const api = {
@@ -237,10 +391,88 @@ export const api = {
     apiClient.get<{ versions: StrategyVersionSummary[] }>(`/api/strategies/user/${id}/versions`),
   getStrategyVersion: (id: string, versionId: string) =>
     apiClient.get<StrategyVersionDetail>(`/api/strategies/user/${id}/versions/${versionId}`),
+  restoreStrategyVersion: (id: string, versionId: string, versionNote?: string) =>
+    apiClient.post<StrategyTemplate>(
+      `/api/strategies/user/${id}/versions/${versionId}/restore`,
+      { version_note: versionNote ?? "" },
+    ),
   runBacktest: (payload: BacktestRunRequest) =>
     apiClient.post<BacktestRunEnvelope>("/api/backtests/runs", payload),
   listBacktestRuns: () =>
     apiClient.get<{ runs: BacktestRunSummary[] }>("/api/backtests/runs"),
   getBacktestRun: (runId: string) =>
     apiClient.get<BacktestRunEnvelope>(`/api/backtests/runs/${runId}`),
+
+  // 策略导入导出
+  exportStrategy: (strategyId: string) =>
+    apiClient.post<StrategyExportPayload>("/api/strategies/export", {
+      strategy_id: strategyId,
+    }),
+  importStrategy: (payload: StrategyExportPayload, overwrite?: boolean) =>
+    apiClient.post<StrategyTemplate>("/api/strategies/import", {
+      payload,
+      overwrite: overwrite ?? false,
+    }),
+
+  // 可见性管理
+  getVisibilityOptions: () =>
+    apiClient.get<VisibilityOptions>("/api/strategies/visibility-options"),
+  setVisibility: (strategyId: string, visibility: string) =>
+    apiClient.put<StrategyTemplate>(
+      `/api/strategies/user/${strategyId}/visibility`,
+      { visibility },
+    ),
+
+  // 版本对比
+  compareStrategyVersions: (strategyId: string) =>
+    apiClient.get<VersionComparison>(`/api/strategies/user/${strategyId}/compare`),
+
+  // 策略市场
+  listMarketplaceStrategies: () =>
+    apiClient.get<{ strategies: MarketplaceStrategy[] }>("/api/strategies/marketplace"),
+
+  // 标签与分类
+  listAllTags: () => apiClient.get<{ tags: string[] }>("/api/strategies/tags"),
+  listCategories: () =>
+    apiClient.get<{ categories: CategoryOption[] }>("/api/strategies/categories"),
+  updateStrategyTags: (strategyId: string, tags: string[], category: string) =>
+    apiClient.put<StrategyTemplate>(`/api/strategies/user/${strategyId}/tags`, {
+      tags,
+      category,
+    }),
+
+  // 参数优化
+  runGridSearch: (payload: GridSearchRequest) =>
+    apiClient.post<GridSearchResponse>("/api/optimization/grid-search", payload),
+  runSensitivity: (payload: SensitivityRequest) =>
+    apiClient.post<SensitivityResponse>("/api/optimization/sensitivity", payload),
+
+  // 快速验证
+  validateCode: (code: string) =>
+    apiClient.post<{
+      valid: boolean;
+      errors: Array<{ type: string; message: string }>;
+      warnings: Array<{ type: string; message: string }>;
+      stats?: { bars_processed: number; orders_generated: number; final_value: number; trades: number };
+    }>("/api/strategies/validate", { code }),
+
+  // Fork 策略
+  forkStrategy: (strategyId: string, newId: string, newTitle: string) =>
+    apiClient.post<StrategyTemplate>(`/api/strategies/marketplace/${strategyId}/fork`, {
+      new_id: newId,
+      new_title: newTitle,
+    }),
+
+  // 评论
+  listComments: (strategyId: string) =>
+    apiClient.get<{ comments: StrategyComment[] }>(
+      `/api/strategies/marketplace/${strategyId}/comments`,
+    ),
+  addComment: (strategyId: string, author: string, content: string) =>
+    apiClient.post<StrategyComment>(`/api/strategies/marketplace/${strategyId}/comments`, {
+      author,
+      content,
+    }),
+  deleteComment: (strategyId: string, commentId: string) =>
+    apiClient.delete<void>(`/api/strategies/marketplace/${strategyId}/comments/${commentId}`),
 };

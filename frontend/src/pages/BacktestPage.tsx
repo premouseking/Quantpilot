@@ -121,6 +121,7 @@ const BacktestPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initializedTemplateIdRef = useRef<string | null>(null);
+  const strategyVersionRef = useRef<string | null>(null);
 
   // --- 服务端枚举：数据源、策略模板 ---
   const providersQuery = useQuery({ queryKey: ["providers"], queryFn: api.listProviders });
@@ -165,12 +166,13 @@ const BacktestPage: React.FC = () => {
   const selectedProperties = selectedSchema.properties ?? {};
   const requiredParams = new Set(selectedSchema.required ?? []);
 
-  // --- 深链：URL ?template= 预填策略模板 ---
+  // --- 深链：URL ?template= 预填策略模板，&version= 标记策略版本 ---
   useEffect(() => {
     const tplId = searchParams.get("template");
     if (tplId) {
       form.setFieldsValue({ templateId: tplId });
     }
+    strategyVersionRef.current = searchParams.get("version");
   }, [searchParams, form]);
 
   useEffect(() => {
@@ -208,6 +210,7 @@ const BacktestPage: React.FC = () => {
       initial_cash: values.initialCash,
       data_provider: values.provider,
       strategy_params: values.strategyParams,
+      strategy_version: strategyVersionRef.current,
       cost_model: {
         commission_rate: values.commissionRate,
         min_commission: 5,

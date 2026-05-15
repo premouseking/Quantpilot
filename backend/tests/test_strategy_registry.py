@@ -11,7 +11,7 @@ from app.data.mock_provider import MockDataProvider
 from app.data.models import Frequency
 from app.engine.backtest import BacktestConfig, run_backtest
 from app.strategy.registry import create_strategy, get_template, list_templates
-from app.strategy.user_store import save_user_strategy
+from app.strategy.user_store import get_strategy_version, restore_strategy_version, save_user_strategy
 
 
 USER_STRATEGY_CODE = """
@@ -147,6 +147,49 @@ def test_saved_user_strategy_is_listed_and_runs_end_to_end() -> None:
     assert len(result.orders) >= 1
 
 
+def test_saved_user_strategy_schema_follows_code_params_schema() -> None:
+    code = """
+from app.strategy.base import Strategy, StrategyContext
+
+
+class CodeDefaultStrategy(Strategy):
+    DEFAULT_PARAMS = {"warmup": 5, "target_percent": 0.7}
+
+    def on_bar(self, ctx: StrategyContext):
+        return None
+
+
+PARAMS_SCHEMA = {
+    "type": "object",
+    "title": "代码参数定义",
+    "properties": {
+        "warmup": {"type": "integer", "title": "预热 Bar", "minimum": 1, "default": 8},
+        "target_percent": {
+            "type": "number",
+            "title": "目标仓位",
+            "minimum": 0.01,
+            "maximum": 1,
+            "default": 0.8,
+        },
+    },
+    "required": ["warmup", "target_percent"],
+}
+"""
+    save_user_strategy(
+        strategy_id="code_default_strategy",
+        title="代码默认值策略",
+        description="schema 应跟随代码 PARAMS_SCHEMA",
+        code=code,
+        params_schema=USER_PARAMS_SCHEMA,
+    )
+
+    template = get_template("code_default_strategy")
+    properties = template.params_schema["properties"]
+    assert template.params_schema["title"] == "代码参数定义"
+    assert properties["warmup"]["default"] == 8
+    assert properties["target_percent"]["default"] == 0.8
+
+
 def test_save_user_strategy_does_not_execute_module_level_code() -> None:
     marker_path = get_runtime_config().strategies_dir / "save_should_not_run.txt"
     code = f"""
@@ -170,3 +213,32 @@ class SaveOnlyStrategy(Strategy):
     )
 
     assert not marker_path.exists()
+
+
+def test_restore_strategy_version_overwrites_current_strategy() -> None:
+    v1_code = USER_STRATEGY_CODE.replace("0.5", "0.4")
+    v2_code = USER_STRATEGY_CODE.replace("0.5", "0.8")
+    save_user_strategy(
+        strategy_id="restore_hold_strategy",
+        title="恢复测试策略",
+        description="第一版",
+        code=v1_code,
+        params_schema=USER_PARAMS_SCHEMA,
+        version_note="v1",
+    )
+    save_user_strategy(
+        strategy_id="restore_hold_strategy",
+        title="恢复测试策略",
+        description="第二版",
+        code=v2_code,
+        params_schema=USER_PARAMS_SCHEMA,
+        overwrite=True,
+        version_note="v2",
+    )
+
+    restored = restore_strategy_version("restore_hold_strategy", "v1")
+    current_version = get_strategy_version("restore_hold_strategy", restored.current_version or "")
+
+    assert restored.current_version == "v3"
+    assert "0.4" in restored.code_path.read_text(encoding="utf-8")
+    assert "0.4" in current_version.code_path.read_text(encoding="utf-8")

@@ -15,26 +15,38 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Select,
   Space,
+  Switch,
+  Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
+  Upload,
 } from "antd";
+import type { SelectProps } from "antd";
 import {
   CodeOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   ExperimentOutlined,
   SaveOutlined,
+  SwapOutlined,
   ThunderboltOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Editor from "@monaco-editor/react";
 import {
   api,
+  MarketplaceStrategy,
   SaveUserStrategyRequest,
+  StrategyExportPayload,
   StrategyTemplate,
   StrategyVersionSummary,
+  VersionComparison,
 } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
 import { QPColors } from "../theme";
@@ -58,6 +70,58 @@ interface SaveFormValues {
   versionNote: string;
 }
 
+const extractAssignedObject = (source: string, name: string) => {
+  const match = new RegExp(`${name}\\s*=\\s*\\{`, "m").exec(source);
+  if (!match) return null;
+  let depth = 0;
+  let quote: string | null = null;
+  let escaped = false;
+  for (let index = match.index + match[0].lastIndexOf("{"); index < source.length; index += 1) {
+    const char = source[index];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === "{") depth += 1;
+    if (char === "}") depth -= 1;
+    if (depth === 0) {
+      return source.slice(match.index + match[0].lastIndexOf("{"), index + 1);
+    }
+  }
+  return null;
+};
+
+const pythonLiteralToJson = (literal: string) => {
+  return literal
+    .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, value: string) =>
+      JSON.stringify(value.replace(/\\'/g, "'")),
+    )
+    .replace(/\bTrue\b/g, "true")
+    .replace(/\bFalse\b/g, "false")
+    .replace(/\bNone\b/g, "null")
+    .replace(/,\s*([}\]])/g, "$1");
+};
+
+const extractParamsSchema = (source: string): Record<string, unknown> | null => {
+  const literal = extractAssignedObject(source, "PARAMS_SCHEMA");
+  if (!literal) return null;
+  try {
+    return JSON.parse(pythonLiteralToJson(literal)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
 const renderSchemaForm = (schema: unknown) => {
   const properties = ((schema as { properties?: Record<string, SchemaProperty> } | undefined)
     ?.properties ?? {}) as Record<string, SchemaProperty>;
@@ -75,7 +139,7 @@ const renderSchemaForm = (schema: unknown) => {
             }`}
           >
             <InputNumber
-              defaultValue={prop.default}
+              value={prop.default}
               min={prop.minimum}
               max={prop.maximum}
               step={prop.type === "integer" ? 1 : 0.01}
@@ -106,7 +170,7 @@ const StrategiesPage: React.FC = () => {
   const [saveForm] = Form.useForm<SaveFormValues>();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [code, setCode] = useState("");
-  const hydratedStrategyIdRef = useRef<string | null>(null);
+  const hydratedStrategyKeyRef = useRef<string | null>(null);
   const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
 
   const templatesQuery = useQuery({
@@ -159,10 +223,19 @@ const StrategiesPage: React.FC = () => {
 
   useEffect(() => {
     if (!selected || !templateDetailQuery.data) return;
-    if (hydratedStrategyIdRef.current === templateDetailQuery.data.id) return;
+    const hydrationKey = [
+      templateDetailQuery.data.id,
+      templateDetailQuery.data.current_version ?? "",
+      templateDetailQuery.data.updated_at ?? "",
+      templateDetailQuery.data.code ?? "",
+      JSON.stringify(templateDetailQuery.data.params_schema),
+    ].join("|");
+    if (hydratedStrategyKeyRef.current === hydrationKey) return;
 
-    hydratedStrategyIdRef.current = templateDetailQuery.data.id;
+    hydratedStrategyKeyRef.current = hydrationKey;
     setCode(templateDetailQuery.data.code ?? "");
+    setEditingTags(templateDetailQuery.data.tags ?? (selected.tags ?? []));
+    setEditingCategory(templateDetailQuery.data.category ?? (selected.category ?? "custom"));
     saveForm.setFieldsValue({
       id: selectedIsUserStrategy ? selected.id : `${selected.id}_custom`,
       title: selectedIsUserStrategy ? selected.title : `${selected.title} 副本`,
@@ -173,22 +246,33 @@ const StrategiesPage: React.FC = () => {
   }, [saveForm, selected, selectedIsUserStrategy, templateDetailQuery.data]);
 
   const watchedSchemaJson = Form.useWatch("schemaJson", saveForm) ?? "{}";
+  const codeParamsSchema = useMemo(() => extractParamsSchema(code), [code]);
+  useEffect(() => {
+    if (!codeParamsSchema) return;
+    const nextSchemaJson = JSON.stringify(codeParamsSchema, null, 2);
+    if (watchedSchemaJson !== nextSchemaJson) {
+      saveForm.setFieldValue("schemaJson", nextSchemaJson);
+    }
+  }, [codeParamsSchema, saveForm, watchedSchemaJson]);
   const schemaPreview = useMemo(() => {
     try {
+      const parsed = JSON.parse(watchedSchemaJson) as Record<string, unknown>;
       return {
-        parsed: JSON.parse(watchedSchemaJson) as Record<string, unknown>,
+        parsed,
+        effective: parsed,
         error: null,
       };
     } catch {
       return {
         parsed: null,
+        effective: null,
         error: "当前参数 schema 不是合法 JSON，保存前请先修正。",
       };
     }
   }, [watchedSchemaJson]);
 
   const selectStrategy = (strategyId: string) => {
-    hydratedStrategyIdRef.current = null;
+    hydratedStrategyKeyRef.current = null;
     setPreviewVersionId(null);
     setSelectedId(strategyId);
   };
@@ -200,7 +284,7 @@ const StrategiesPage: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: ["templates"] });
       await queryClient.invalidateQueries({ queryKey: ["strategy-template", saved.id] });
       await queryClient.invalidateQueries({ queryKey: ["strategy-versions", saved.id] });
-      hydratedStrategyIdRef.current = null;
+      hydratedStrategyKeyRef.current = null;
       setSelectedId(saved.id);
       saveForm.setFieldValue("versionNote", "");
     },
@@ -214,12 +298,162 @@ const StrategiesPage: React.FC = () => {
     onSuccess: async () => {
       message.success("策略已删除");
       await queryClient.invalidateQueries({ queryKey: ["templates"] });
-      hydratedStrategyIdRef.current = null;
+      hydratedStrategyKeyRef.current = null;
       setPreviewVersionId(null);
       setSelectedId(null);
     },
     onError: (error: unknown) => {
       message.error(`删除失败：${error instanceof Error ? error.message : String(error)}`);
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: ({ strategyId, versionId }: { strategyId: string; versionId: string }) =>
+      api.restoreStrategyVersion(strategyId, versionId),
+    onSuccess: async (saved) => {
+      message.success(`已用历史版本覆盖当前策略：${saved.current_version}`);
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
+      await queryClient.invalidateQueries({ queryKey: ["strategy-template", saved.id] });
+      await queryClient.invalidateQueries({ queryKey: ["strategy-versions", saved.id] });
+      hydratedStrategyKeyRef.current = null;
+      setPreviewVersionId(null);
+      setSelectedId(saved.id);
+    },
+    onError: (error: unknown) => {
+      message.error(`恢复失败：${error instanceof Error ? error.message : String(error)}`);
+    },
+  });
+
+  // ── 导入导出 ──
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importFileContent, setImportFileContent] = useState<StrategyExportPayload | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (!selectedId || !selectedIsUserStrategy) return;
+    setExporting(true);
+    try {
+      const payload = await api.exportStrategy(selectedId);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${selectedId}.quantpilot.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      message.success(`策略 ${selectedId} 已导出`);
+    } catch (error: unknown) {
+      message.error(`导出失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = JSON.parse(e.target?.result as string) as StrategyExportPayload;
+        if (!content.format_version || !content.strategy) {
+          message.error("无效的策略导出文件：缺少 format_version 或 strategy 字段");
+          return;
+        }
+        setImportFileContent(content);
+        setImportOverwrite(false);
+        setImportModalOpen(true);
+      } catch {
+        message.error("无法解析 JSON 文件，请检查文件格式");
+      }
+    };
+    reader.readAsText(file);
+    return false;
+  };
+
+  const importMutation = useMutation({
+    mutationFn: (params: { payload: StrategyExportPayload; overwrite: boolean }) =>
+      api.importStrategy(params.payload, params.overwrite),
+    onSuccess: async (saved) => {
+      message.success(`策略已导入：${saved.id}`);
+      setImportModalOpen(false);
+      setImportFileContent(null);
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
+      setSelectedId(saved.id);
+    },
+    onError: (error: unknown) => {
+      message.error(`导入失败：${error instanceof Error ? error.message : String(error)}`);
+    },
+  });
+
+  // ── 可见性管理 ──
+  const visibilityMutation = useMutation({
+    mutationFn: ({ strategyId, visibility }: { strategyId: string; visibility: string }) =>
+      api.setVisibility(strategyId, visibility),
+    onSuccess: async () => {
+      message.success("可见性已更新");
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
+      await queryClient.invalidateQueries({ queryKey: ["strategy-template", selectedId as string] });
+    },
+    onError: (error: unknown) => {
+      message.error(`可见性更新失败：${error instanceof Error ? error.message : String(error)}`);
+    },
+  });
+
+  // ── 版本对比 ──
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
+  const compareQuery = useQuery({
+    queryKey: ["strategy-compare", selectedId],
+    queryFn: () => api.compareStrategyVersions(selectedId as string),
+    enabled: false,
+    retry: false,
+  });
+
+  // ── 快速验证 ──
+  const validateMutation = useMutation({
+    mutationFn: () => api.validateCode(code),
+    onSuccess: (result) => {
+      if (result.valid) {
+        const stats = result.stats;
+        const msg = stats
+          ? `验证通过：处理 ${stats.bars_processed} 根 Bar，生成 ${stats.orders_generated} 个订单，${stats.trades} 笔成交`
+          : "验证通过";
+        message.success(msg);
+        if (result.warnings.length > 0) {
+          result.warnings.forEach((w) => message.warning(w.message));
+        }
+      } else {
+        result.errors.forEach((e) => message.error(`[${e.type}] ${e.message}`));
+      }
+    },
+    onError: (error: unknown) => {
+      message.error(`验证失败：${error instanceof Error ? error.message : String(error)}`);
+    },
+  });
+
+  // ── 标签与分类 ──
+  const allTagsQuery = useQuery({ queryKey: ["all-tags"], queryFn: api.listAllTags });
+  const allTags = allTagsQuery.data?.tags ?? [];
+  const tagOptions: SelectProps["options"] = useMemo(
+    () => allTags.map((t) => ({ value: t, label: t })),
+    [allTags],
+  );
+  const categoriesQuery = useQuery({ queryKey: ["categories"], queryFn: api.listCategories });
+  const categoryOptions = categoriesQuery.data?.categories ?? [];
+  const [editingTags, setEditingTags] = useState<string[]>([]);
+  const [editingCategory, setEditingCategory] = useState("custom");
+
+  const tagsMutation = useMutation({
+    mutationFn: (params: { strategyId: string; tags: string[]; category: string }) =>
+      api.updateStrategyTags(params.strategyId, params.tags, params.category),
+    onSuccess: async () => {
+      message.success("标签和分类已更新");
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
+      await queryClient.invalidateQueries({ queryKey: ["all-tags"] });
+    },
+    onError: (error: unknown) => {
+      message.error(`更新失败：${error instanceof Error ? error.message : String(error)}`);
     },
   });
 
@@ -236,7 +470,7 @@ const StrategiesPage: React.FC = () => {
       title: values.title,
       description: values.description ?? "",
       code,
-      params_schema: paramsSchema,
+      params_schema: codeParamsSchema ?? paramsSchema,
       overwrite: selectedIsUserStrategy && selectedId === values.id,
       version_note: values.versionNote?.trim() || undefined,
     });
@@ -262,7 +496,20 @@ const StrategiesPage: React.FC = () => {
         <Col xs={24} lg={8} xl={7}>
           <Card
             title="策略资产"
-            extra={<Tag bordered={false}>{templates.length} 个</Tag>}
+            extra={
+              <Space size={8}>
+                <Upload
+                  accept=".json"
+                  showUploadList={false}
+                  beforeUpload={handleImportFile}
+                >
+                  <Button size="small" icon={<UploadOutlined />}>
+                    导入
+                  </Button>
+                </Upload>
+                <Tag bordered={false}>{templates.length} 个</Tag>
+              </Space>
+            }
             loading={templatesQuery.isLoading}
             style={{ height: "100%" }}
           >
@@ -303,21 +550,30 @@ const StrategiesPage: React.FC = () => {
               selected && (
                 <Space wrap>
                   {selectedIsUserStrategy && (
-                    <Popconfirm
-                      title="删除这个用户策略？"
-                      description="会同时删除本地保存的代码和元数据。"
-                      okText="删除"
-                      cancelText="取消"
-                      onConfirm={() => deleteMutation.mutate(selected.id)}
-                    >
+                    <>
                       <Button
-                        danger
-                        icon={<DeleteOutlined />}
-                        loading={deleteMutation.isPending}
+                        icon={<DownloadOutlined />}
+                        loading={exporting}
+                        onClick={handleExport}
                       >
-                        删除
+                        导出
                       </Button>
-                    </Popconfirm>
+                      <Popconfirm
+                        title="删除这个用户策略？"
+                        description="会同时删除本地保存的代码和元数据。"
+                        okText="删除"
+                        cancelText="取消"
+                        onConfirm={() => deleteMutation.mutate(selected.id)}
+                      >
+                        <Button
+                          danger
+                          icon={<DeleteOutlined />}
+                          loading={deleteMutation.isPending}
+                        >
+                          删除
+                        </Button>
+                      </Popconfirm>
+                    </>
                   )}
                   <Button
                     icon={<SaveOutlined />}
@@ -329,7 +585,13 @@ const StrategiesPage: React.FC = () => {
                   <Button
                     type="primary"
                     icon={<ThunderboltOutlined />}
-                    onClick={() => navigate(`/backtest?template=${selected.id}`)}
+                    onClick={() => {
+                      const params = new URLSearchParams({ template: selected.id });
+                      if (selected.current_version) {
+                        params.set("version", selected.current_version);
+                      }
+                      navigate(`/backtest?${params.toString()}`);
+                    }}
                   >
                     用此策略回测
                   </Button>
@@ -386,12 +648,85 @@ const StrategiesPage: React.FC = () => {
                                     : "不适用",
                               },
                               {
+                                key: "visibility",
+                                label: "可见性",
+                                children: selectedIsUserStrategy ? (
+                                  <Switch
+                                    checked={selected.visibility === "public"}
+                                    checkedChildren="公开"
+                                    unCheckedChildren="私有"
+                                    loading={visibilityMutation.isPending}
+                                    onChange={(checked) =>
+                                      visibilityMutation.mutate({
+                                        strategyId: selected.id,
+                                        visibility: checked ? "public" : "private",
+                                      })
+                                    }
+                                  />
+                                ) : (
+                                  "内置模板（公开）"
+                                ),
+                              },
+                              {
                                 key: "updated",
                                 label: "最后更新",
                                 children: formatTimestamp(selected.updated_at),
                               },
                             ]}
                           />
+                          {selectedIsUserStrategy && (
+                            <Card
+                              size="small"
+                              title="标签与分类"
+                              style={{ marginTop: 16 }}
+                              extra={
+                                <Button
+                                  size="small"
+                                  type="primary"
+                                  loading={tagsMutation.isPending}
+                                  onClick={() =>
+                                    tagsMutation.mutate({
+                                      strategyId: selected.id,
+                                      tags: editingTags,
+                                      category: editingCategory,
+                                    })
+                                  }
+                                >
+                                  保存
+                                </Button>
+                              }
+                            >
+                              <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                                <div>
+                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                    分类
+                                  </Text>
+                                  <Select
+                                    value={editingCategory}
+                                    onChange={(v) => setEditingCategory(v)}
+                                    options={categoryOptions}
+                                    style={{ width: "100%" }}
+                                    size="small"
+                                  />
+                                </div>
+                                <div>
+                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                    标签（最多 10 个）
+                                  </Text>
+                                  <Select
+                                    mode="tags"
+                                    value={editingTags}
+                                    onChange={(v) => setEditingTags(v.slice(0, 10))}
+                                    options={tagOptions}
+                                    style={{ width: "100%" }}
+                                    size="small"
+                                    placeholder="输入标签后回车添加"
+                                    maxCount={10}
+                                  />
+                                </div>
+                              </Space>
+                            </Card>
+                          )}
                           <Alert
                             style={{ marginTop: 16 }}
                             type="info"
@@ -445,10 +780,38 @@ const StrategiesPage: React.FC = () => {
                               }
                             />
                           </Form.Item>
-                          <Title level={5} style={{ marginTop: 16 }}>
-                            <CodeOutlined style={{ marginRight: 6 }} />
-                            Python 策略代码
-                          </Title>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+                            <Title level={5} style={{ marginBottom: 0 }}>
+                              <CodeOutlined style={{ marginRight: 6 }} />
+                              Python 策略代码
+                            </Title>
+                            <Space size={4} wrap>
+                              <Button
+                                size="small"
+                                type="link"
+                                icon={<ExperimentOutlined />}
+                                loading={validateMutation.isPending}
+                                onClick={() => validateMutation.mutate()}
+                              >
+                                快速验证
+                              </Button>
+                              <Text type="secondary" style={{ fontSize: 11 }}>片段:</Text>
+                              {EDITOR_SNIPPETS.map((s) => (
+                                <Tooltip key={s.label} title={s.description}>
+                                  <Button
+                                    size="small"
+                                    type="dashed"
+                                    onClick={() => {
+                                      const insertText = typeof s.code === "function" ? s.code(code) : s.code;
+                                      setCode(insertText);
+                                    }}
+                                  >
+                                    {s.label}
+                                  </Button>
+                                </Tooltip>
+                              ))}
+                            </Space>
+                          </div>
                           <div className="qp-monaco">
                             <Editor
                               height="360px"
@@ -475,17 +838,32 @@ const StrategiesPage: React.FC = () => {
                         <>
                           <Form.Item
                             name="schemaJson"
-                            tooltip="保存时会作为 params_schema 提交，回测页会根据该 schema 动态渲染参数表单。"
+                            tooltip="从 Python 代码里的 PARAMS_SCHEMA 自动同步；请在代码中修改 PARAMS_SCHEMA。"
                           >
-                            <TextArea rows={10} className="qp-mono" />
+                            <TextArea rows={10} className="qp-mono" readOnly />
                           </Form.Item>
                           {schemaPreview.error ? (
                             <Alert type="warning" showIcon message={schemaPreview.error} />
                           ) : (
                             <>
+                              {codeParamsSchema ? (
+                                <Alert
+                                  type="info"
+                                  showIcon
+                                  message="参数定义已从当前 Python 代码的 PARAMS_SCHEMA 同步。"
+                                  style={{ marginBottom: 12 }}
+                                />
+                              ) : (
+                                <Alert
+                                  type="warning"
+                                  showIcon
+                                  message="当前代码未声明可解析的 PARAMS_SCHEMA，参数定义会显示为空。"
+                                  style={{ marginBottom: 12 }}
+                                />
+                              )}
                               <Text type="secondary">表单预览</Text>
                               <div style={{ marginTop: 12 }}>
-                                {renderSchemaForm(schemaPreview.parsed) ?? (
+                                {renderSchemaForm(schemaPreview.effective) ?? (
                                   <span className="qp-muted">该策略未声明参数</span>
                                 )}
                               </div>
@@ -505,12 +883,32 @@ const StrategiesPage: React.FC = () => {
                             message="内置模板不记录用户版本历史。若要进入版本管理，请先保存为我的策略。"
                           />
                         ) : (
-                          <VersionHistoryPanel
-                            versions={versions}
-                            currentVersion={selected.current_version}
-                            loading={versionsQuery.isLoading}
-                            onPreview={(versionId) => setPreviewVersionId(versionId)}
-                          />
+                          <>
+                            <div style={{ marginBottom: 12 }}>
+                              <Button
+                                icon={<SwapOutlined />}
+                                onClick={() => {
+                                  compareQuery.refetch();
+                                  setCompareModalOpen(true);
+                                }}
+                              >
+                                版本回测对比
+                              </Button>
+                            </div>
+                            <VersionHistoryPanel
+                              versions={versions}
+                              currentVersion={selected.current_version}
+                              loading={versionsQuery.isLoading}
+                              onPreview={(versionId) => setPreviewVersionId(versionId)}
+                              onRestore={(versionId) =>
+                                restoreMutation.mutate({
+                                  strategyId: selected.id,
+                                  versionId,
+                                })
+                              }
+                              restoring={restoreMutation.isPending}
+                            />
+                          </>
                         ),
                     },
                   ]}
@@ -622,6 +1020,28 @@ const StrategiesPage: React.FC = () => {
                 },
               ]}
             />
+            <Popconfirm
+              title="用该历史版本覆盖当前策略？"
+              description="当前策略代码和参数定义会被替换，并自动生成一个新的当前版本。"
+              okText="覆盖"
+              cancelText="取消"
+              onConfirm={() => {
+                if (!selectedId || !versionDetailQuery.data) return;
+                restoreMutation.mutate({
+                  strategyId: selectedId,
+                  versionId: versionDetailQuery.data.version_id,
+                });
+              }}
+            >
+              <Button
+                type="primary"
+                danger
+                loading={restoreMutation.isPending}
+                disabled={versionDetailQuery.data.version_id === selected?.current_version}
+              >
+                用此版本覆盖当前策略
+              </Button>
+            </Popconfirm>
             <Editor
               height="420px"
               defaultLanguage="python"
@@ -638,6 +1058,184 @@ const StrategiesPage: React.FC = () => {
           <Empty description={versionDetailQuery.isLoading ? "正在加载版本详情" : "暂无版本详情"} />
         )}
       </Modal>
+
+      {/* 导入策略 */}
+      <Modal
+        open={importModalOpen}
+        onCancel={() => {
+          setImportModalOpen(false);
+          setImportFileContent(null);
+        }}
+        title="导入策略"
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setImportModalOpen(false);
+              setImportFileContent(null);
+            }}
+          >
+            取消
+          </Button>,
+          <Button
+            key="import"
+            type="primary"
+            loading={importMutation.isPending}
+            onClick={() => {
+              if (importFileContent) {
+                importMutation.mutate({
+                  payload: importFileContent,
+                  overwrite: importOverwrite,
+                });
+              }
+            }}
+          >
+            导入
+          </Button>,
+        ]}
+        width={600}
+      >
+        {importFileContent ? (
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
+            <Descriptions
+              size="small"
+              bordered
+              column={1}
+              items={[
+                { key: "id", label: "策略 ID", children: importFileContent.strategy.id },
+                { key: "title", label: "名称", children: importFileContent.strategy.title },
+                {
+                  key: "description",
+                  label: "描述",
+                  children: importFileContent.strategy.description || "无描述",
+                },
+                {
+                  key: "versions",
+                  label: "包含版本",
+                  children: `${importFileContent.strategy.versions?.length ?? 0} 个版本`,
+                },
+                {
+                  key: "exported",
+                  label: "导出时间",
+                  children: formatTimestamp(importFileContent.exported_at),
+                },
+              ]}
+            />
+            <div>
+              <Space>
+                <Switch
+                  checked={importOverwrite}
+                  onChange={setImportOverwrite}
+                />
+                <span>覆盖同名策略（若已存在）</span>
+              </Space>
+            </div>
+            <Alert
+              type="warning"
+              showIcon
+              message="导入策略代码将在本地执行。仅导入来自可信来源的策略文件。"
+            />
+          </Space>
+        ) : (
+          <Empty description="请选择策略导出文件" />
+        )}
+      </Modal>
+
+      {/* 版本回测对比 */}
+      <Modal
+        open={compareModalOpen}
+        onCancel={() => setCompareModalOpen(false)}
+        footer={null}
+        width={900}
+        title={`版本回测对比 — ${selected?.title ?? selectedId}`}
+      >
+        {compareQuery.isLoading ? (
+          <Empty description="正在加载对比数据" />
+        ) : compareQuery.data?.comparisons?.length ? (
+          <Table<VersionComparison["comparisons"][number]>
+            dataSource={compareQuery.data.comparisons}
+            rowKey="version_id"
+            pagination={false}
+            size="small"
+            columns={[
+              {
+                title: "版本",
+                dataIndex: "version_id",
+                key: "version_id",
+                render: (value: string) => (
+                  <Space>
+                    <Tag color="volcano">{value}</Tag>
+                    {value === selected?.current_version && (
+                      <Tag bordered={false}>当前</Tag>
+                    )}
+                  </Space>
+                ),
+              },
+              {
+                title: "回测次数",
+                dataIndex: "run_count",
+                key: "run_count",
+                align: "right",
+              },
+              {
+                title: "累计收益",
+                dataIndex: "cumulative_return",
+                key: "cumulative_return",
+                align: "right",
+                render: (value: number | null) =>
+                  value != null ? (
+                    <span style={{ color: value >= 0 ? "#3f6b48" : "#bd3f29" }}>
+                      {(value * 100).toFixed(2)}%
+                    </span>
+                  ) : (
+                    "-"
+                  ),
+                sorter: (a, b) => (a.cumulative_return ?? -999) - (b.cumulative_return ?? -999),
+                defaultSortOrder: "descend",
+              },
+              {
+                title: "年化收益",
+                dataIndex: "annualized_return",
+                key: "annualized_return",
+                align: "right",
+                render: (value: number | null) =>
+                  value != null ? `${(value * 100).toFixed(2)}%` : "-",
+              },
+              {
+                title: "夏普比率",
+                dataIndex: "sharpe_ratio",
+                key: "sharpe_ratio",
+                align: "right",
+                render: (value: number | null) =>
+                  value != null ? value.toFixed(2) : "-",
+              },
+              {
+                title: "最大回撤",
+                dataIndex: "max_drawdown",
+                key: "max_drawdown",
+                align: "right",
+                render: (value: number | null) =>
+                  value != null ? `${(value * 100).toFixed(2)}%` : "-",
+              },
+              {
+                title: "胜率",
+                dataIndex: "win_rate",
+                key: "win_rate",
+                align: "right",
+                render: (value: number | null) =>
+                  value != null ? `${(value * 100).toFixed(1)}%` : "-",
+              },
+            ]}
+          />
+        ) : (
+          <Empty
+            description={
+              compareQuery.data?.message ||
+              "尚未找到该策略的回测记录。请先用各版本执行回测后再对比。"
+            }
+          />
+        )}
+      </Modal>
     </div>
   );
 };
@@ -647,7 +1245,9 @@ const VersionHistoryPanel: React.FC<{
   currentVersion?: string | null;
   loading: boolean;
   onPreview: (versionId: string) => void;
-}> = ({ versions, currentVersion, loading, onPreview }) => (
+  onRestore: (versionId: string) => void;
+  restoring: boolean;
+}> = ({ versions, currentVersion, loading, onPreview, onRestore, restoring }) => (
   <List
     loading={loading}
     dataSource={versions}
@@ -658,6 +1258,23 @@ const VersionHistoryPanel: React.FC<{
           <Button key="preview" type="link" onClick={() => onPreview(item.version_id)}>
             查看版本
           </Button>,
+          <Popconfirm
+            key="restore"
+            title="用该历史版本覆盖当前策略？"
+            description="会替换当前代码和参数定义，并生成一个新的当前版本。"
+            okText="覆盖"
+            cancelText="取消"
+            onConfirm={() => onRestore(item.version_id)}
+          >
+            <Button
+              type="link"
+              danger
+              loading={restoring}
+              disabled={item.version_id === currentVersion}
+            >
+              覆盖当前
+            </Button>
+          </Popconfirm>,
         ]}
       >
         <List.Item.Meta
@@ -768,25 +1385,154 @@ const INDICATOR_CATALOG: Array<{
     name: "SMA",
     kind: "趋势",
     description: "简单移动平均线，用于平滑价格趋势",
-    signature: "sma(series, window)",
+    signature: "sma(close, window)",
   },
   {
     name: "EMA",
     kind: "趋势",
     description: "指数加权移动平均，最近价格权重更高",
-    signature: "ema(series, span)",
+    signature: "ema(close, window)",
   },
   {
     name: "RSI",
     kind: "动量",
     description: "相对强弱指标，识别超买超卖",
-    signature: "rsi(series, period=14)",
+    signature: "rsi(close, period=14)",
   },
   {
     name: "MACD",
     kind: "动量",
     description: "MACD 线 / 信号线 / 柱状差",
-    signature: "macd(series, fast=12, slow=26, signal=9)",
+    signature: "macd(close, fast=12, slow=26, signal=9)",
+  },
+  {
+    name: "Bollinger",
+    kind: "波动",
+    description: "布林带：上轨/中轨/下轨，识别超买超卖和波动收缩",
+    signature: "bollinger_bands(close, window=20, num_std=2.0)",
+  },
+  {
+    name: "ATR",
+    kind: "波动",
+    description: "平均真实波幅，衡量市场波动程度",
+    signature: "atr(high, low, close, window=14)",
+  },
+  {
+    name: "KDJ",
+    kind: "动量",
+    description: "随机指标 K/D/J 线，判断超买超卖和拐点",
+    signature: "kdj(high, low, close, n=9, k_window=3, d_window=3)",
+  },
+  {
+    name: "OBV",
+    kind: "量价",
+    description: "能量潮，用成交量验证价格趋势",
+    signature: "obv(close, volume)",
+  },
+  {
+    name: "Williams %R",
+    kind: "动量",
+    description: "威廉指标，-80 以下超卖，-20 以上超买",
+    signature: "williams_r(high, low, close, window=14)",
+  },
+];
+
+const EDITOR_SNIPPETS: Array<{
+  label: string;
+  description: string;
+  code: string | ((current: string) => string);
+}> = [
+  {
+    label: "新策略",
+    description: "Strategy 子类模板，包含 initialize / on_bar / finalize",
+    code: `from app.strategy.base import Strategy, StrategyContext
+
+class MyStrategy(Strategy):
+    def initialize(self, params):
+        pass
+
+    def on_bar(self, ctx: StrategyContext):
+        # 在此编写策略逻辑
+        # ctx.order_target_percent(0.95)  # 调仓至目标仓位
+        # ctx.submit_order("buy", 100)     # 按数量下单
+        pass
+
+    def finalize(self):
+        pass
+`,
+  },
+  {
+    label: "SMA 交叉",
+    description: "双均线交叉清仓/建仓模式",
+    code: `from app.strategy.base import Strategy, StrategyContext
+from app.strategy.indicators import sma
+
+class MySmaStrategy(Strategy):
+    def initialize(self, params):
+        self.short = int(params.get("short_window", 5))
+        self.long = int(params.get("long_window", 20))
+        self.target = float(params.get("target_percent", 0.95))
+
+    def on_bar(self, ctx: StrategyContext):
+        if len(ctx.history) < self.long:
+            return
+        import pandas as pd
+        closes = pd.Series([b.close for b in ctx.history])
+        short_ma = sma(closes, self.short)
+        long_ma = sma(closes, self.long)
+        if short_ma.iloc[-2] <= long_ma.iloc[-2] and short_ma.iloc[-1] > long_ma.iloc[-1]:
+            ctx.order_target_percent(self.target)
+        elif short_ma.iloc[-2] >= long_ma.iloc[-2] and short_ma.iloc[-1] < long_ma.iloc[-1]:
+            ctx.order_target_percent(0.0)
+`,
+  },
+  {
+    label: "RSI 反转",
+    description: "RSI 超买/超卖反转逻辑",
+    code: `from app.strategy.base import Strategy, StrategyContext
+from app.strategy.indicators import rsi
+
+class MyRsiStrategy(Strategy):
+    def initialize(self, params):
+        self.window = int(params.get("window", 14))
+        self.oversold = float(params.get("oversold", 30))
+        self.overbought = float(params.get("overbought", 70))
+        self.target = float(params.get("target_percent", 0.95))
+        self.invested = False
+
+    def on_bar(self, ctx: StrategyContext):
+        if len(ctx.history) < self.window:
+            return
+        import pandas as pd
+        closes = pd.Series([b.close for b in ctx.history])
+        rsi_value = rsi(closes, self.window).iloc[-1]
+        if not self.invested and rsi_value <= self.oversold:
+            ctx.order_target_percent(self.target)
+            self.invested = True
+        elif self.invested and rsi_value >= self.overbought:
+            ctx.order_target_percent(0.0)
+            self.invested = False
+`,
+  },
+  {
+    label: "PARAMS_SCHEMA",
+    description: "插入参数定义模板",
+    code: `
+PARAMS_SCHEMA = {
+    "type": "object",
+    "title": "策略参数",
+    "properties": {
+        "target_percent": {
+            "type": "number",
+            "title": "目标仓位",
+            "minimum": 0.01,
+            "maximum": 1.0,
+            "default": 0.95,
+        },
+    },
+    "required": ["target_percent"],
+}
+`,
   },
 ];
 
