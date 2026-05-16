@@ -19,6 +19,7 @@ import {
   ArrowLeftOutlined,
   RocketOutlined,
   CodeOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import { api } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
@@ -30,7 +31,30 @@ import { ReturnDistribution } from "../components/ReturnDistribution";
 import { TradesTable } from "../components/TradesTable";
 import { PriceWithTrades } from "../components/PriceWithTrades";
 import { Sparkline } from "../components/Sparkline";
+import { TradeProfitChart } from "../components/TradeProfitChart";
+import { HoldingPeriodChart } from "../components/HoldingPeriodChart";
+import { buildRoundTripTrades, summarizeRoundTrips } from "../utils/analytics";
 import { fmtDateTime, fmtMoney, fmtPercent, tone } from "../utils/format";
+
+const downloadText = (filename: string, content: string, type: string) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+const escapeCsv = (value: string | number | null | undefined): string => {
+  const text = value === null || value === undefined ? "" : String(value);
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+};
 
 const BacktestReportPage: React.FC = () => {
   const { runId = "" } = useParams<{ runId: string }>();
@@ -72,6 +96,15 @@ const BacktestReportPage: React.FC = () => {
     const profitPct = profit / report.config.initial_cash;
     return { profit, profitPct };
   }, [report]);
+
+  const roundTrips = useMemo(
+    () => (report ? buildRoundTripTrades(report.fills) : []),
+    [report],
+  );
+  const tradeSummary = useMemo(
+    () => summarizeRoundTrips(roundTrips),
+    [roundTrips],
+  );
 
   if (runQuery.isLoading) {
     return (
@@ -115,6 +148,51 @@ const BacktestReportPage: React.FC = () => {
   const sparkColor =
     t === "positive" ? "#3f6b48" : t === "negative" ? "#bd3f29" : "#1a1612";
 
+  const exportJson = () => {
+    downloadText(
+      `${runId}-report.json`,
+      JSON.stringify(runQuery.data, null, 2),
+      "application/json;charset=utf-8",
+    );
+  };
+
+  const exportTradesCsv = () => {
+    const header = [
+      "id",
+      "symbol",
+      "entry_time",
+      "exit_time",
+      "quantity",
+      "entry_price",
+      "exit_price",
+      "gross_pnl",
+      "fees",
+      "slippage",
+      "net_pnl",
+      "return_pct",
+      "holding_days",
+    ];
+    const rows = roundTrips.map((trade) => [
+      trade.id,
+      trade.symbol,
+      trade.entryTime,
+      trade.exitTime,
+      trade.quantity,
+      trade.entryPrice,
+      trade.exitPrice,
+      trade.grossPnl,
+      trade.fees,
+      trade.slippage,
+      trade.netPnl,
+      trade.returnPct,
+      trade.holdingDays,
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => escapeCsv(cell)).join(","))
+      .join("\n");
+    downloadText(`${runId}-round-trips.csv`, csv, "text/csv;charset=utf-8");
+  };
+
   return (
     <div className="qp-page">
       <PageHeader
@@ -128,6 +206,16 @@ const BacktestReportPage: React.FC = () => {
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/runs")}>
               返回列表
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={exportJson}>
+              导出报告
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={exportTradesCsv}
+              disabled={roundTrips.length === 0}
+            >
+              导出交易
             </Button>
             <Link to={`/backtest?template=${config?.template_id ?? ""}`}>
               <Button type="primary" icon={<RocketOutlined />}>
@@ -312,6 +400,56 @@ const BacktestReportPage: React.FC = () => {
               label: `交易 (${fills.length})`,
               children: (
                 <div style={{ display: "grid", gap: 16 }}>
+                  <Row gutter={[12, 12]}>
+                    <Col xs={12} md={6}>
+                      <div className="qp-kpi">
+                        <span className="qp-kpi__label">已平仓笔数</span>
+                        <span className="qp-kpi__value">{tradeSummary.count}</span>
+                        <span className="qp-kpi__delta">
+                          胜 {tradeSummary.winCount} / 负 {tradeSummary.lossCount}
+                        </span>
+                      </div>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <div
+                        className={`qp-kpi ${
+                          tradeSummary.totalNetPnl >= 0
+                            ? "qp-kpi--positive"
+                            : "qp-kpi--negative"
+                        }`}
+                      >
+                        <span className="qp-kpi__label">已实现净收益</span>
+                        <span className="qp-kpi__value">
+                          {fmtMoney(tradeSummary.totalNetPnl)}
+                        </span>
+                        <span className="qp-kpi__delta">
+                          平均 {fmtMoney(tradeSummary.avgNetPnl)}
+                        </span>
+                      </div>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <div className="qp-kpi">
+                        <span className="qp-kpi__label">单笔最好 / 最差</span>
+                        <span className="qp-kpi__value">
+                          {fmtMoney(tradeSummary.bestNetPnl)}
+                        </span>
+                        <span className="qp-kpi__delta">
+                          最差 {fmtMoney(tradeSummary.worstNetPnl)}
+                        </span>
+                      </div>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <div className="qp-kpi">
+                        <span className="qp-kpi__label">平均持仓</span>
+                        <span className="qp-kpi__value">
+                          {tradeSummary.avgHoldingDays.toFixed(1)} 天
+                        </span>
+                        <span className="qp-kpi__delta">
+                          最长 {tradeSummary.maxHoldingDays.toFixed(1)} 天
+                        </span>
+                      </div>
+                    </Col>
+                  </Row>
                   <Card type="inner" title="买卖点位">
                     {barsQuery.isLoading ? (
                       <Skeleton active paragraph={{ rows: 6 }} />
@@ -323,6 +461,51 @@ const BacktestReportPage: React.FC = () => {
                         showIcon
                         message="无法加载行情数据，跳过买卖点图。"
                       />
+                    )}
+                  </Card>
+                  <Row gutter={[16, 16]}>
+                    <Col xs={24} lg={12}>
+                      <Card type="inner" title="每笔交易收益分析">
+                        <TradeProfitChart trades={roundTrips} />
+                      </Card>
+                    </Col>
+                    <Col xs={24} lg={12}>
+                      <Card type="inner" title="持仓时间分布">
+                        <HoldingPeriodChart trades={roundTrips} />
+                      </Card>
+                    </Col>
+                  </Row>
+                  <Card type="inner" title="已平仓交易明细">
+                    {roundTrips.length === 0 ? (
+                      <Empty description="暂无完整买卖配对交易" />
+                    ) : (
+                      <Row gutter={[12, 12]}>
+                        {roundTrips.slice(0, 12).map((trade, index) => (
+                          <Col xs={24} md={12} xl={8} key={trade.id}>
+                            <div
+                              className={`qp-kpi ${
+                                trade.netPnl >= 0
+                                  ? "qp-kpi--positive"
+                                  : "qp-kpi--negative"
+                              }`}
+                            >
+                              <span className="qp-kpi__label">
+                                #{index + 1} {trade.symbol} ·{" "}
+                                {trade.entryTime.slice(0, 10)} →{" "}
+                                {trade.exitTime.slice(0, 10)}
+                              </span>
+                              <span className="qp-kpi__value">
+                                {fmtMoney(trade.netPnl)}
+                              </span>
+                              <span className="qp-kpi__delta">
+                                {fmtPercent(trade.returnPct)} ·{" "}
+                                {trade.holdingDays.toFixed(1)} 天 ·{" "}
+                                {trade.quantity.toLocaleString()} 股
+                              </span>
+                            </div>
+                          </Col>
+                        ))}
+                      </Row>
                     )}
                   </Card>
                   <Card type="inner" title="成交明细">
